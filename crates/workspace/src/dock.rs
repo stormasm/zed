@@ -227,8 +227,7 @@ impl Dock {
                     workspace.zoomed = None;
                     workspace.zoomed_position = None;
                 }
-                workspace.dismiss_zoomed_items_to_reveal(Some(position), cx);
-                workspace.update_active_view_for_followers(cx)
+                workspace.dismiss_zoomed_items_to_reveal(Some(position), cx)
             }
         })
         .detach();
