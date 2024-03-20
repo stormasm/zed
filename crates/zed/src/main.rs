@@ -52,7 +52,7 @@ use util::{
 };
 use uuid::Uuid;
 use welcome::{show_welcome_view, BaseKeymap, FIRST_OPEN};
-use workspace::{AppState, WorkspaceStore};
+use workspace::AppState;
 use zed::{
     app_menus, build_window_options, ensure_only_instance, handle_keymap_file_changes,
     initialize_workspace, IsOnlyInstance, OpenListener,
@@ -153,7 +153,7 @@ fn main() {
         language::init(cx);
         languages::init(languages.clone(), node_runtime.clone(), cx);
         let user_store = cx.new_model(|cx| UserStore::new(client.clone(), cx));
-        let workspace_store = cx.new_model(|cx| WorkspaceStore::new(client.clone(), cx));
+        //let workspace_store = cx.new_model(|cx| WorkspaceStore::new(client.clone(), cx));
 
         Client::set_global(client.clone(), cx);
 
@@ -226,7 +226,7 @@ fn main() {
             user_store: user_store.clone(),
             fs: fs.clone(),
             build_window_options,
-            workspace_store,
+            //workspace_store,
             node_runtime,
         });
         AppState::set_global(Arc::downgrade(&app_state), cx);

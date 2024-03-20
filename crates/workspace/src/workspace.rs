@@ -393,7 +393,7 @@ pub struct AppState {
     pub languages: Arc<LanguageRegistry>,
     pub client: Arc<Client>,
     pub user_store: Model<UserStore>,
-    pub workspace_store: Model<WorkspaceStore>,
+    //pub workspace_store: Model<WorkspaceStore>,
     pub fs: Arc<dyn fs::Fs>,
     pub build_window_options: fn(Option<Uuid>, &mut AppContext) -> WindowOptions,
     pub node_runtime: Arc<dyn NodeRuntime>,
@@ -402,10 +402,6 @@ pub struct AppState {
 struct GlobalAppState(Weak<AppState>);
 
 impl Global for GlobalAppState {}
-
-pub struct WorkspaceStore {
-    workspaces: HashSet<WindowHandle<Workspace>>,
-}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 struct Follower {
@@ -641,11 +637,6 @@ impl Workspace {
         cx.focus_view(&center_pane);
         cx.emit(Event::PaneAdded(center_pane.clone()));
 
-        let window_handle = cx.window_handle().downcast::<Workspace>().unwrap();
-        app_state.workspace_store.update(cx, |store, _| {
-            store.workspaces.insert(window_handle);
-        });
-
         let mut current_user = app_state.user_store.read(cx).watch_current_user();
         let mut connection_status = app_state.client.status();
         let _observe_current_user = cx.spawn(|this, mut cx| async move {
@@ -731,12 +722,6 @@ impl Workspace {
             cx.observe(&right_dock, |this, _, cx| {
                 this.serialize_workspace(cx).detach();
                 cx.notify();
-            }),
-            cx.on_release(|this, window, cx| {
-                this.app_state.workspace_store.update(cx, |store, _| {
-                    let window = window.downcast::<Self>().unwrap();
-                    store.workspaces.remove(&window);
-                })
             }),
         ];
 
