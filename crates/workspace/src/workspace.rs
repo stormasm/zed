@@ -565,13 +565,6 @@ pub struct ViewId {
     pub id: u64,
 }
 
-#[derive(Default)]
-struct FollowerState {
-    leader_id: PeerId,
-    active_view_id: Option<ViewId>,
-    items_by_leader_view_id: HashMap<ViewId, Box<dyn FollowableItemHandle>>,
-}
-
 impl Workspace {
     pub fn new(
         workspace_id: WorkspaceId,

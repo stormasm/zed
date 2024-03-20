@@ -1,4 +1,4 @@
-use crate::{pane_group::element::pane_axis, AppState, FollowerState, Pane, Workspace};
+use crate::{pane_group::element::pane_axis, AppState, Pane, Workspace};
 use anyhow::{anyhow, Result};
 use call::{ActiveCall, ParticipantLocation};
 use collections::HashMap;
