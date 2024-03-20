@@ -12557,7 +12557,6 @@ dependencies = [
  "cli",
  "client",
  "clock",
- "collab_ui",
  "collections",
  "command_palette",
  "copilot",
