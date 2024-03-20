@@ -2,9 +2,14 @@ use crate::{
     pane::{self, Pane},
     persistence::model::ItemId,
     searchable::SearchableItemHandle,
-    workspace_settings::{AutosaveSetting, WorkspaceSettings},
-    DelayedDebouncedEditAction, FollowableItemBuilders, ItemNavHistory, ToolbarItemLocation,
-    ViewId, Workspace, WorkspaceId,
+    //workspace_settings::{AutosaveSetting, WorkspaceSettings},
+    DelayedDebouncedEditAction,
+    FollowableItemBuilders,
+    ItemNavHistory,
+    ToolbarItemLocation,
+    ViewId,
+    Workspace,
+    WorkspaceId,
 };
 use anyhow::Result;
 use client::{
@@ -14,19 +19,18 @@ use client::{
 use futures::{channel::mpsc, StreamExt};
 use gpui::{
     AnyElement, AnyView, AppContext, Entity, EntityId, EventEmitter, FocusHandle, FocusableView,
-    HighlightStyle, Model, Pixels, Point, SharedString, Task, View, ViewContext, WeakView,
-    WindowContext,
+    HighlightStyle, Pixels, Point, SharedString, Task, View, ViewContext, WeakView, WindowContext,
 };
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::Settings;
-use smallvec::SmallVec;
+//use smallvec::SmallVec;
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
     ops::Range,
-    path::PathBuf,
+    //path::PathBuf,
     rc::Rc,
     sync::Arc,
     time::Duration,
