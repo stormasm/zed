@@ -3282,23 +3282,7 @@ impl Render for Workspace {
     }
 }
 
-impl ViewId {
-    pub(crate) fn from_proto(message: proto::ViewId) -> Result<Self> {
-        Ok(Self {
-            creator: message
-                .creator
-                .ok_or_else(|| anyhow!("creator is missing"))?,
-            id: message.id,
-        })
-    }
-
-    pub(crate) fn to_proto(&self) -> proto::ViewId {
-        proto::ViewId {
-            creator: Some(self.creator),
-            id: self.id,
-        }
-    }
-}
+impl ViewId {}
 
 pub trait WorkspaceHandle {
     fn file_project_paths(&self, cx: &AppContext) -> Vec<ProjectPath>;

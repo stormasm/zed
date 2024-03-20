@@ -1,10 +1,8 @@
 use crate::{pane_group::element::pane_axis, AppState, Pane, Workspace};
 use anyhow::{anyhow, Result};
-use call::{ActiveCall, ParticipantLocation};
-use collections::HashMap;
 use gpui::{
-    point, size, AnyView, AnyWeakView, Axis, Bounds, IntoElement, Model, MouseButton, Pixels,
-    Point, StyleRefinement, View, ViewContext,
+    point, size, AnyView, AnyWeakView, Axis, Bounds, IntoElement, Model, Pixels, Point,
+    StyleRefinement, View, ViewContext,
 };
 use parking_lot::Mutex;
 use project::Project;
