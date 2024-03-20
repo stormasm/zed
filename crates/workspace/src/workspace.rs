@@ -12,9 +12,8 @@ mod toolbar;
 mod workspace_settings;
 
 use anyhow::{anyhow, Context as _, Result};
-use call::{call_settings::CallSettings, ActiveCall};
 use client::{
-    proto::{self, ErrorCode, PeerId},
+    proto::{self, PeerId},
     ChannelId, Client, ErrorExt, ProjectId, Status, TypedEnvelope, UserStore,
 };
 use collections::{hash_map, HashMap, HashSet};
@@ -412,7 +411,6 @@ impl Global for GlobalAppState {}
 
 pub struct WorkspaceStore {
     workspaces: HashSet<WindowHandle<Workspace>>,
-    client: Arc<Client>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -686,7 +684,7 @@ impl Workspace {
 
         let modal_layer = cx.new_view(|_| ModalLayer::new());
 
-        let subscriptions = vec![
+        let _subscriptions = vec![
             cx.observe_window_activation(Self::on_window_activation_changed),
             cx.observe_window_bounds(move |_, cx| {
                 if let Some(display) = cx.display() {
@@ -1223,13 +1221,13 @@ impl Workspace {
 
     pub fn prepare_to_close(
         &mut self,
-        quitting: bool,
+        _quitting: bool,
         cx: &mut ViewContext<Self>,
     ) -> Task<Result<bool>> {
         let window = cx.window_handle();
 
         cx.spawn(|this, mut cx| async move {
-            let workspace_count = (*cx).update(|cx| {
+            let _workspace_count = (*cx).update(|cx| {
                 cx.windows()
                     .iter()
                     .filter(|window| window.downcast::<Workspace>().is_some())
@@ -2283,7 +2281,7 @@ impl Workspace {
                 self.split_and_clone(pane, *direction, cx);
             }
             pane::Event::Remove => self.remove_pane(pane, cx),
-            pane::Event::ActivateItem { local } => {
+            pane::Event::ActivateItem { local: _ } => {
                 if &pane == self.active_pane() {
                     self.active_item_path_changed(cx);
                 }
@@ -3287,15 +3285,6 @@ impl Render for Workspace {
             } else {
                 None
             })
-    }
-}
-
-impl WorkspaceStore {
-    pub fn new(client: Arc<Client>, cx: &mut ModelContext<Self>) -> Self {
-        Self {
-            workspaces: Default::default(),
-            client,
-        }
     }
 }
 
