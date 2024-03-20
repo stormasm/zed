@@ -15,7 +15,6 @@ use gpui::{
     WeakFocusHandle, WeakView, WindowContext,
 };
 use parking_lot::Mutex;
-use project::{Project, ProjectEntryId, ProjectPath};
 use serde::Deserialize;
 use settings::Settings;
 use std::{
@@ -173,7 +172,7 @@ pub struct Pane {
     split_item_menu: Option<View<ContextMenu>>,
     //     tab_context_menu: View<ContextMenu>,
     pub(crate) workspace: WeakView<Workspace>,
-    project: Model<Project>,
+    //project: Model<Project>,
     drag_split_direction: Option<SplitDirection>,
     can_drop_predicate: Option<Arc<dyn Fn(&dyn Any, &mut WindowContext) -> bool>>,
     custom_drop_handle:
@@ -199,7 +198,7 @@ struct NavHistoryState {
     backward_stack: VecDeque<NavigationEntry>,
     forward_stack: VecDeque<NavigationEntry>,
     closed_stack: VecDeque<NavigationEntry>,
-    paths_by_item: HashMap<EntityId, (ProjectPath, Option<PathBuf>)>,
+    //paths_by_item: HashMap<EntityId, (ProjectPath, Option<PathBuf>)>,
     pane: WeakView<Pane>,
     next_timestamp: Arc<AtomicUsize>,
 }
@@ -240,7 +239,7 @@ impl EventEmitter<Event> for Pane {}
 impl Pane {
     pub fn new(
         workspace: WeakView<Workspace>,
-        project: Model<Project>,
+        //project: Model<Project>,
         next_timestamp: Arc<AtomicUsize>,
         can_drop_predicate: Option<Arc<dyn Fn(&dyn Any, &mut WindowContext) -> bool + 'static>>,
         double_click_dispatch_action: Box<dyn Action>,
@@ -278,7 +277,6 @@ impl Pane {
             tab_bar_scroll_handle: ScrollHandle::new(),
             drag_split_direction: None,
             workspace,
-            project,
             can_drop_predicate,
             custom_drop_handle: None,
             can_split: true,
@@ -505,23 +503,11 @@ impl Pane {
 
     pub(crate) fn open_item(
         &mut self,
-        project_entry_id: Option<ProjectEntryId>,
         focus_item: bool,
         cx: &mut ViewContext<Self>,
         build_item: impl FnOnce(&mut ViewContext<Pane>) -> Box<dyn ItemHandle>,
     ) -> Box<dyn ItemHandle> {
         let mut existing_item = None;
-        if let Some(project_entry_id) = project_entry_id {
-            for (index, item) in self.items.iter().enumerate() {
-                if item.is_singleton(cx)
-                    && item.project_entry_ids(cx).as_slice() == [project_entry_id]
-                {
-                    let item = item.boxed_clone();
-                    existing_item = Some((index, item));
-                    break;
-                }
-            }
-        }
 
         if let Some((index, existing_item)) = existing_item {
             self.activate_item(index, focus_item, focus_item, cx);
@@ -653,20 +639,6 @@ impl Pane {
         self.items
             .get(self.active_item_index)?
             .pixel_position_of_cursor(cx)
-    }
-
-    pub fn item_for_entry(
-        &self,
-        entry_id: ProjectEntryId,
-        cx: &AppContext,
-    ) -> Option<Box<dyn ItemHandle>> {
-        self.items.iter().find_map(|item| {
-            if item.is_singleton(cx) && item.project_entry_ids(cx).as_slice() == [entry_id] {
-                Some(item.boxed_clone())
-            } else {
-                None
-            }
-        })
     }
 
     pub fn index_for_item(&self, item: &dyn ItemHandle) -> Option<usize> {
@@ -881,43 +853,6 @@ impl Pane {
         )
     }
 
-    pub(super) fn file_names_for_prompt(
-        items: &mut dyn Iterator<Item = &Box<dyn ItemHandle>>,
-        all_dirty_items: usize,
-        cx: &AppContext,
-    ) -> (String, String) {
-        /// Quantity of item paths displayed in prompt prior to cutoff..
-        const FILE_NAMES_CUTOFF_POINT: usize = 10;
-        let mut file_names: Vec<_> = items
-            .filter_map(|item| {
-                item.project_path(cx).and_then(|project_path| {
-                    project_path
-                        .path
-                        .file_name()
-                        .and_then(|name| name.to_str().map(ToOwned::to_owned))
-                })
-            })
-            .take(FILE_NAMES_CUTOFF_POINT)
-            .collect();
-        let should_display_followup_text =
-            all_dirty_items > FILE_NAMES_CUTOFF_POINT || file_names.len() != all_dirty_items;
-        if should_display_followup_text {
-            let not_shown_files = all_dirty_items - file_names.len();
-            if not_shown_files == 1 {
-                file_names.push(".. 1 file not shown".into());
-            } else {
-                file_names.push(format!(".. {} files not shown", not_shown_files));
-            }
-        }
-        (
-            format!(
-                "Do you want to save changes to the following {} files?",
-                all_dirty_items
-            ),
-            file_names.join("\n"),
-        )
-    }
-
     pub fn close_items(
         &mut self,
         cx: &mut ViewContext<Pane>,
@@ -1104,132 +1039,6 @@ impl Pane {
         cx.notify();
     }
 
-    pub async fn save_item(
-        project: Model<Project>,
-        pane: &WeakView<Pane>,
-        item_ix: usize,
-        item: &dyn ItemHandle,
-        save_intent: SaveIntent,
-        cx: &mut AsyncWindowContext,
-    ) -> Result<bool> {
-        const CONFLICT_MESSAGE: &str =
-                "This file has changed on disk since you started editing it. Do you want to overwrite it?";
-
-        if save_intent == SaveIntent::Skip {
-            return Ok(true);
-        }
-
-        let (mut has_conflict, mut is_dirty, mut can_save, can_save_as) = cx.update(|cx| {
-            (
-                item.has_conflict(cx),
-                item.is_dirty(cx),
-                item.can_save(cx),
-                item.is_singleton(cx),
-            )
-        })?;
-
-        // when saving a single buffer, we ignore whether or not it's dirty.
-        if save_intent == SaveIntent::Save || save_intent == SaveIntent::SaveWithoutFormat {
-            is_dirty = true;
-        }
-
-        if save_intent == SaveIntent::SaveAs {
-            is_dirty = true;
-            has_conflict = false;
-            can_save = false;
-        }
-
-        if save_intent == SaveIntent::Overwrite {
-            has_conflict = false;
-        }
-
-        let should_format = save_intent != SaveIntent::SaveWithoutFormat;
-
-        if has_conflict && can_save {
-            let answer = pane.update(cx, |pane, cx| {
-                pane.activate_item(item_ix, true, true, cx);
-                cx.prompt(
-                    PromptLevel::Warning,
-                    CONFLICT_MESSAGE,
-                    None,
-                    &["Overwrite", "Discard", "Cancel"],
-                )
-            })?;
-            match answer.await {
-                Ok(0) => {
-                    pane.update(cx, |_, cx| item.save(should_format, project, cx))?
-                        .await?
-                }
-                Ok(1) => pane.update(cx, |_, cx| item.reload(project, cx))?.await?,
-                _ => return Ok(false),
-            }
-        } else if is_dirty && (can_save || can_save_as) {
-            if save_intent == SaveIntent::Close {
-                let will_autosave = cx.update(|cx| {
-                    matches!(
-                        WorkspaceSettings::get_global(cx).autosave,
-                        AutosaveSetting::OnFocusChange | AutosaveSetting::OnWindowChange
-                    ) && Self::can_autosave_item(item, cx)
-                })?;
-                if !will_autosave {
-                    let answer = pane.update(cx, |pane, cx| {
-                        pane.activate_item(item_ix, true, true, cx);
-                        let prompt = dirty_message_for(item.project_path(cx));
-                        cx.prompt(
-                            PromptLevel::Warning,
-                            &prompt,
-                            None,
-                            &["Save", "Don't Save", "Cancel"],
-                        )
-                    })?;
-                    match answer.await {
-                        Ok(0) => {}
-                        Ok(1) => return Ok(true), // Don't save this file
-                        _ => return Ok(false),    // Cancel
-                    }
-                }
-            }
-
-            if can_save {
-                pane.update(cx, |_, cx| item.save(should_format, project, cx))?
-                    .await?;
-            } else if can_save_as {
-                let start_abs_path = project
-                    .update(cx, |project, cx| {
-                        let worktree = project.visible_worktrees(cx).next()?;
-                        Some(worktree.read(cx).as_local()?.abs_path().to_path_buf())
-                    })?
-                    .unwrap_or_else(|| Path::new("").into());
-
-                let abs_path = cx.update(|cx| cx.prompt_for_new_path(&start_abs_path))?;
-                if let Some(abs_path) = abs_path.await.ok().flatten() {
-                    pane.update(cx, |_, cx| item.save_as(project, abs_path, cx))?
-                        .await?;
-                } else {
-                    return Ok(false);
-                }
-            }
-        }
-        Ok(true)
-    }
-
-    fn can_autosave_item(item: &dyn ItemHandle, cx: &AppContext) -> bool {
-        let is_deleted = item.project_entry_ids(cx).is_empty();
-        item.is_dirty(cx) && !item.has_conflict(cx) && item.can_save(cx) && !is_deleted
-    }
-
-    pub fn autosave_item(
-        item: &dyn ItemHandle,
-        project: Model<Project>,
-        cx: &mut WindowContext,
-    ) -> Task<Result<()>> {
-        if Self::can_autosave_item(item, cx) {
-            item.save(true, project, cx)
-        } else {
-            Task::ready(Ok(()))
-        }
-    }
-
     pub fn focus(&mut self, cx: &mut ViewContext<Pane>) {
         cx.focus(&self.focus_handle);
     }
@@ -1247,25 +1056,6 @@ impl Pane {
 
     pub fn toolbar(&self) -> &View<Toolbar> {
         &self.toolbar
-    }
-
-    pub fn handle_deleted_project_item(
-        &mut self,
-        entry_id: ProjectEntryId,
-        cx: &mut ViewContext<Pane>,
-    ) -> Option<()> {
-        let (item_index_to_delete, item_id) = self.items().enumerate().find_map(|(i, item)| {
-            if item.is_singleton(cx) && item.project_entry_ids(cx).as_slice() == [entry_id] {
-                Some((i, item.item_id()))
-            } else {
-                None
-            }
-        })?;
-
-        self.remove_item(item_index_to_delete, false, cx);
-        self.nav_history.remove_item(item_id);
-
-        Some(())
     }
 
     fn update_toolbar(&mut self, cx: &mut ViewContext<Self>) {
@@ -1358,19 +1148,12 @@ impl Pane {
             .drag_over::<DraggedTab>(|tab, _, cx| {
                 tab.bg(cx.theme().colors().drop_target_background)
             })
-            .drag_over::<ProjectEntryId>(|tab, _, cx| {
-                tab.bg(cx.theme().colors().drop_target_background)
-            })
             .when_some(self.can_drop_predicate.clone(), |this, p| {
                 this.can_drop(move |a, cx| p(a, cx))
             })
             .on_drop(cx.listener(move |this, dragged_tab: &DraggedTab, cx| {
                 this.drag_split_direction = None;
                 this.handle_tab_drop(dragged_tab, ix, cx)
-            }))
-            .on_drop(cx.listener(move |this, entry_id: &ProjectEntryId, cx| {
-                this.drag_split_direction = None;
-                this.handle_project_entry_drop(entry_id, cx)
             }))
             .on_drop(cx.listener(move |this, paths, cx| {
                 this.drag_split_direction = None;
@@ -1462,23 +1245,6 @@ impl Pane {
                                 }
                             }),
                         );
-
-                    if let Some(entry) = single_entry_to_resolve {
-                        let entry_id = entry.to_proto();
-                        menu = menu.separator().entry(
-                            "Reveal In Project Panel",
-                            Some(Box::new(RevealInProjectPanel {
-                                entry_id: Some(entry_id),
-                            })),
-                            cx.handler_for(&pane, move |pane, cx| {
-                                pane.project.update(cx, |_, cx| {
-                                    cx.emit(project::Event::RevealInProjectPanel(
-                                        ProjectEntryId::from_proto(entry_id),
-                                    ))
-                                });
-                            }),
-                        );
-                    }
                 }
 
                 menu
@@ -1540,16 +1306,9 @@ impl Pane {
                     .drag_over::<DraggedTab>(|bar, _, cx| {
                         bar.bg(cx.theme().colors().drop_target_background)
                     })
-                    .drag_over::<ProjectEntryId>(|bar, _, cx| {
-                        bar.bg(cx.theme().colors().drop_target_background)
-                    })
                     .on_drop(cx.listener(move |this, dragged_tab: &DraggedTab, cx| {
                         this.drag_split_direction = None;
                         this.handle_tab_drop(dragged_tab, this.items.len(), cx)
-                    }))
-                    .on_drop(cx.listener(move |this, entry_id: &ProjectEntryId, cx| {
-                        this.drag_split_direction = None;
-                        this.handle_project_entry_drop(entry_id, cx)
                     }))
                     .on_drop(cx.listener(move |this, paths, cx| {
                         this.drag_split_direction = None;
@@ -1669,94 +1428,6 @@ impl Pane {
             .log_err();
     }
 
-    fn handle_project_entry_drop(
-        &mut self,
-        project_entry_id: &ProjectEntryId,
-        cx: &mut ViewContext<'_, Self>,
-    ) {
-        if let Some(custom_drop_handle) = self.custom_drop_handle.clone() {
-            if let ControlFlow::Break(()) = custom_drop_handle(self, project_entry_id, cx) {
-                return;
-            }
-        }
-        let mut to_pane = cx.view().clone();
-        let split_direction = self.drag_split_direction;
-        let project_entry_id = *project_entry_id;
-        self.workspace
-            .update(cx, |_, cx| {
-                cx.defer(move |workspace, cx| {
-                    if let Some(path) = workspace
-                        .project()
-                        .read(cx)
-                        .path_for_entry(project_entry_id, cx)
-                    {
-                        if let Some(split_direction) = split_direction {
-                            to_pane = workspace.split_pane(to_pane, split_direction, cx);
-                        }
-                        workspace
-                            .open_path(path, Some(to_pane.downgrade()), true, cx)
-                            .detach_and_log_err(cx);
-                    }
-                });
-            })
-            .log_err();
-    }
-
-    fn handle_external_paths_drop(
-        &mut self,
-        paths: &ExternalPaths,
-        cx: &mut ViewContext<'_, Self>,
-    ) {
-        if let Some(custom_drop_handle) = self.custom_drop_handle.clone() {
-            if let ControlFlow::Break(()) = custom_drop_handle(self, paths, cx) {
-                return;
-            }
-        }
-        let mut to_pane = cx.view().clone();
-        let mut split_direction = self.drag_split_direction;
-        let paths = paths.paths().to_vec();
-        self.workspace
-            .update(cx, |workspace, cx| {
-                let fs = Arc::clone(workspace.project().read(cx).fs());
-                cx.spawn(|workspace, mut cx| async move {
-                    let mut is_file_checks = FuturesUnordered::new();
-                    for path in &paths {
-                        is_file_checks.push(fs.is_file(path))
-                    }
-                    let mut has_files_to_open = false;
-                    while let Some(is_file) = is_file_checks.next().await {
-                        if is_file {
-                            has_files_to_open = true;
-                            break;
-                        }
-                    }
-                    drop(is_file_checks);
-                    if !has_files_to_open {
-                        split_direction = None;
-                    }
-
-                    if let Some(open_task) = workspace
-                        .update(&mut cx, |workspace, cx| {
-                            if let Some(split_direction) = split_direction {
-                                to_pane = workspace.split_pane(to_pane, split_direction, cx);
-                            }
-                            workspace.open_paths(
-                                paths,
-                                OpenVisible::OnlyDirectories,
-                                Some(to_pane.downgrade()),
-                                cx,
-                            )
-                        })
-                        .ok()
-                    {
-                        let _opened_items: Vec<_> = open_task.await;
-                    }
-                })
-                .detach();
-            })
-            .log_err();
-    }
-
     pub fn display_nav_history_buttons(&mut self, display: bool) {
         self.display_nav_history_buttons = display;
     }
@@ -1844,19 +1515,6 @@ impl Render for Pane {
                     }
                 }),
             )
-            .on_action(
-                cx.listener(|pane: &mut Self, action: &RevealInProjectPanel, cx| {
-                    let entry_id = action
-                        .entry_id
-                        .map(ProjectEntryId::from_proto)
-                        .or_else(|| pane.active_item()?.project_entry_ids(cx).first().copied());
-                    if let Some(entry_id) = entry_id {
-                        pane.project.update(cx, |_, cx| {
-                            cx.emit(project::Event::RevealInProjectPanel(entry_id))
-                        });
-                    }
-                }),
-            )
             .when(self.active_item().is_some(), |pane| {
                 pane.child(self.render_tab_bar(cx))
             })
@@ -1868,7 +1526,6 @@ impl Render for Pane {
                     .relative()
                     .group("")
                     .on_drag_move::<DraggedTab>(cx.listener(Self::handle_drag_move))
-                    .on_drag_move::<ProjectEntryId>(cx.listener(Self::handle_drag_move))
                     .on_drag_move::<ExternalPaths>(cx.listener(Self::handle_drag_move))
                     .map(|div| {
                         if let Some(item) = self.active_item() {
@@ -1897,7 +1554,6 @@ impl Render for Pane {
                                 0.75,
                             ))
                             .group_drag_over::<DraggedTab>("", |style| style.visible())
-                            .group_drag_over::<ProjectEntryId>("", |style| style.visible())
                             .group_drag_over::<ExternalPaths>("", |style| style.visible())
                             .when_some(self.can_drop_predicate.clone(), |this, p| {
                                 this.can_drop(move |a, cx| p(a, cx))
@@ -1970,30 +1626,6 @@ impl ItemNavHistory {
 }
 
 impl NavHistory {
-    pub fn for_each_entry(
-        &self,
-        cx: &AppContext,
-        mut f: impl FnMut(&NavigationEntry, (ProjectPath, Option<PathBuf>)),
-    ) {
-        let borrowed_history = self.0.lock();
-        borrowed_history
-            .forward_stack
-            .iter()
-            .chain(borrowed_history.backward_stack.iter())
-            .chain(borrowed_history.closed_stack.iter())
-            .for_each(|entry| {
-                if let Some(project_and_abs_path) =
-                    borrowed_history.paths_by_item.get(&entry.item.id())
-                {
-                    f(entry, project_and_abs_path.clone());
-                } else if let Some(item) = entry.item.upgrade() {
-                    if let Some(path) = item.project_path(cx) {
-                        f(entry, (path, None));
-                    }
-                }
-            })
-    }
-
     pub fn set_mode(&mut self, mode: NavigationMode) {
         self.0.lock().mode = mode;
     }
@@ -2094,10 +1726,6 @@ impl NavHistory {
             .closed_stack
             .retain(|entry| entry.item.id() != item_id);
     }
-
-    pub fn path_for_item(&self, item_id: EntityId) -> Option<(ProjectPath, Option<PathBuf>)> {
-        self.0.lock().paths_by_item.get(&item_id).cloned()
-    }
 }
 
 impl NavHistoryState {
@@ -2108,19 +1736,6 @@ impl NavHistoryState {
             });
         }
     }
-}
-
-fn dirty_message_for(buffer_path: Option<ProjectPath>) -> String {
-    let path = buffer_path
-        .as_ref()
-        .and_then(|p| {
-            p.path
-                .to_str()
-                .and_then(|s| if s == "" { None } else { Some(s) })
-        })
-        .unwrap_or("This buffer");
-    let path = truncate_and_remove_front(path, 80);
-    format!("{path} contains unsaved edits. Do you want to save it?")
 }
 
 impl Render for DraggedTab {
