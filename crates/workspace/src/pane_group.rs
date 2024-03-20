@@ -92,23 +92,13 @@ impl PaneGroup {
     pub(crate) fn render(
         &self,
         project: &Model<Project>,
-        follower_states: &HashMap<View<Pane>, FollowerState>,
-        active_call: Option<&Model<ActiveCall>>,
         active_pane: &View<Pane>,
         zoomed: Option<&AnyWeakView>,
         app_state: &Arc<AppState>,
         cx: &mut ViewContext<Workspace>,
     ) -> impl IntoElement {
-        self.root.render(
-            project,
-            0,
-            follower_states,
-            active_call,
-            active_pane,
-            zoomed,
-            app_state,
-            cx,
-        )
+        self.root
+            .render(project, 0, active_pane, zoomed, app_state, cx)
     }
 
     pub(crate) fn panes(&self) -> Vec<&View<Pane>> {
@@ -165,8 +155,6 @@ impl Member {
         &self,
         project: &Model<Project>,
         basis: usize,
-        follower_states: &HashMap<View<Pane>, FollowerState>,
-        active_call: Option<&Model<ActiveCall>>,
         active_pane: &View<Pane>,
         zoomed: Option<&AnyWeakView>,
         app_state: &Arc<AppState>,
@@ -178,18 +166,6 @@ impl Member {
                     return div().into_any();
                 }
 
-                let follower_state = follower_states.get(pane);
-
-                let leader = follower_state.and_then(|state| {
-                    let room = active_call?.read(cx).room()?.read(cx);
-                    room.remote_participant_for_peer_id(state.leader_id)
-                });
-
-                let is_in_unshared_view = follower_state.map_or(false, |state| {
-                    state.active_view_id.is_some_and(|view_id| {
-                        !state.items_by_leader_view_id.contains_key(&view_id)
-                    })
-                });
                 div()
                     .relative()
                     .flex_1()
@@ -201,16 +177,7 @@ impl Member {
                     .into_any()
             }
             Member::Axis(axis) => axis
-                .render(
-                    project,
-                    basis + 1,
-                    follower_states,
-                    active_call,
-                    active_pane,
-                    zoomed,
-                    app_state,
-                    cx,
-                )
+                .render(project, basis + 1, active_pane, zoomed, app_state, cx)
                 .into_any(),
         }
     }
@@ -395,8 +362,6 @@ impl PaneAxis {
         &self,
         project: &Model<Project>,
         basis: usize,
-        follower_states: &HashMap<View<Pane>, FollowerState>,
-        active_call: Option<&Model<ActiveCall>>,
         active_pane: &View<Pane>,
         zoomed: Option<&AnyWeakView>,
         app_state: &Arc<AppState>,
@@ -420,8 +385,6 @@ impl PaneAxis {
                 .render(
                     project,
                     (basis + ix) * 10,
-                    follower_states,
-                    active_call,
                     active_pane,
                     zoomed,
                     app_state,
