@@ -1,18 +1,17 @@
 use crate::{
     item::{ClosePosition, Item, ItemHandle, ItemSettings, WeakItemHandle},
     toolbar::Toolbar,
-    workspace_settings::{AutosaveSetting, WorkspaceSettings},
-    NewCenterTerminal, NewFile, NewSearch, OpenVisible, SplitDirection, ToggleZoom, Workspace,
+    NewCenterTerminal, NewFile, NewSearch, SplitDirection, ToggleZoom, Workspace,
 };
 use anyhow::Result;
 use collections::{HashMap, HashSet, VecDeque};
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::StreamExt;
 use gpui::{
     actions, impl_actions, overlay, prelude::*, Action, AnchorCorner, AnyElement, AppContext,
-    AsyncWindowContext, ClickEvent, DismissEvent, Div, DragMoveEvent, EntityId, EventEmitter,
-    ExternalPaths, FocusHandle, FocusableView, Model, MouseButton, NavigationDirection, Pixels,
-    Point, PromptLevel, Render, ScrollHandle, Subscription, Task, View, ViewContext, VisualContext,
-    WeakFocusHandle, WeakView, WindowContext,
+    ClickEvent, DismissEvent, Div, DragMoveEvent, EntityId, EventEmitter, ExternalPaths,
+    FocusHandle, FocusableView, MouseButton, NavigationDirection, Pixels, Point, PromptLevel,
+    Render, ScrollHandle, Subscription, Task, View, ViewContext, VisualContext, WeakFocusHandle,
+    WeakView, WindowContext,
 };
 use parking_lot::Mutex;
 use serde::Deserialize;
@@ -21,7 +20,6 @@ use std::{
     any::Any,
     cmp, fmt, mem,
     ops::ControlFlow,
-    path::{Path, PathBuf},
     rc::Rc,
     sync::{
         atomic::{AtomicUsize, Ordering},
@@ -35,7 +33,7 @@ use ui::{
     IconSize, Indicator, Label, Tab, TabBar, TabPosition, Tooltip,
 };
 use ui::{v_flex, ContextMenu};
-use util::{maybe, truncate_and_remove_front, ResultExt};
+use util::{maybe, ResultExt};
 
 #[derive(PartialEq, Clone, Copy, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
