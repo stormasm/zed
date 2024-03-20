@@ -14,22 +14,18 @@ mod workspace_settings;
 use anyhow::{anyhow, Context as _, Result};
 use client::{
     proto::{self, PeerId},
-    ChannelId, Client, ErrorExt, ProjectId, Status, TypedEnvelope, UserStore,
+    Client, UserStore,
 };
 use collections::{hash_map, HashMap, HashSet};
 use derive_more::{Deref, DerefMut};
 use dock::{Dock, DockPosition, Panel, PanelButtons, PanelHandle};
-use futures::{
-    channel::{mpsc, oneshot},
-    future::try_join_all,
-    Future, FutureExt, StreamExt,
-};
+use futures::{channel::oneshot, Future, FutureExt, StreamExt};
 use gpui::{
     actions, canvas, impl_actions, point, size, Action, AnyElement, AnyView, AnyWeakView,
-    AppContext, AsyncAppContext, AsyncWindowContext, Bounds, DragMoveEvent, Entity as _, EntityId,
-    EventEmitter, FocusHandle, FocusableView, Global, GlobalPixels, KeyContext, Keystroke,
-    LayoutId, ManagedView, Model, ModelContext, PathPromptOptions, Point, PromptLevel, Render,
-    Size, Subscription, Task, View, WeakView, WindowHandle, WindowOptions,
+    AppContext, AsyncAppContext, Bounds, DragMoveEvent, Entity as _, EntityId, EventEmitter,
+    FocusHandle, FocusableView, Global, GlobalPixels, KeyContext, Keystroke, LayoutId, ManagedView,
+    Model, PathPromptOptions, Point, PromptLevel, Render, Size, Task, View, WeakView, WindowHandle,
+    WindowOptions,
 };
 use item::{FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, ProjectItem};
 use itertools::Itertools;
@@ -49,7 +45,6 @@ use postage::stream::Stream;
 use project::{Project, ProjectEntryId, ProjectPath, Worktree, WorktreeId};
 use serde::Deserialize;
 use settings::Settings;
-use shared_screen::SharedScreen;
 use sqlez::{
     bindable::{Bind, Column, StaticColumnCount},
     statement::Statement,
@@ -75,8 +70,7 @@ pub use toolbar::{Toolbar, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemVie
 pub use ui;
 use ui::{
     div, Context as _, Div, Element, ElementContext, InteractiveElement as _, IntoElement, Label,
-    ParentElement as _, Pixels, SharedString, Styled as _, ViewContext, VisualContext as _,
-    WindowContext,
+    ParentElement as _, Pixels, Styled as _, ViewContext, VisualContext as _, WindowContext,
 };
 use util::ResultExt;
 use uuid::Uuid;
@@ -1224,7 +1218,7 @@ impl Workspace {
         _quitting: bool,
         cx: &mut ViewContext<Self>,
     ) -> Task<Result<bool>> {
-        let window = cx.window_handle();
+        let _window = cx.window_handle();
 
         cx.spawn(|this, mut cx| async move {
             let _workspace_count = (*cx).update(|cx| {
