@@ -184,29 +184,13 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut AppContext) {
             let project_panel = ProjectPanel::load(workspace_handle.clone(), cx.clone());
             let terminal_panel = TerminalPanel::load(workspace_handle.clone(), cx.clone());
             let assistant_panel = AssistantPanel::load(workspace_handle.clone(), cx.clone());
-            let (
-                project_panel,
-                terminal_panel,
-                assistant_panel,
-                channels_panel,
-                chat_panel,
-                notification_panel,
-            ) = futures::try_join!(
-                project_panel,
-                terminal_panel,
-                assistant_panel,
-                channels_panel,
-                chat_panel,
-                notification_panel,
-            )?;
+            let (project_panel, terminal_panel, assistant_panel) =
+                futures::try_join!(project_panel, terminal_panel, assistant_panel,)?;
 
             workspace_handle.update(&mut cx, |workspace, cx| {
                 workspace.add_panel(project_panel, cx);
                 workspace.add_panel(terminal_panel, cx);
                 workspace.add_panel(assistant_panel, cx);
-                workspace.add_panel(channels_panel, cx);
-                workspace.add_panel(chat_panel, cx);
-                workspace.add_panel(notification_panel, cx);
                 cx.focus_self();
             })
         })

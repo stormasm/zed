@@ -12,7 +12,7 @@ use db::kvp::KEY_VALUE_STORE;
 use editor::Editor;
 use env_logger::Builder;
 use fs::RealFs;
-use futures::{future, StreamExt};
+use futures::StreamExt;
 use gpui::{App, AppContext, AsyncAppContext, Context, SemanticVersion, Task};
 use image_viewer;
 use isahc::{prelude::Configurable, Request};
@@ -54,9 +54,8 @@ use uuid::Uuid;
 use welcome::{show_welcome_view, BaseKeymap, FIRST_OPEN};
 use workspace::{AppState, WorkspaceStore};
 use zed::{
-    app_menus, build_window_options, ensure_only_instance, handle_cli_connection,
-    handle_keymap_file_changes, initialize_workspace, open_paths_with_positions, IsOnlyInstance,
-    OpenListener, OpenRequest,
+    app_menus, build_window_options, ensure_only_instance, handle_keymap_file_changes,
+    initialize_workspace, IsOnlyInstance, OpenListener,
 };
 
 #[global_allocator]
@@ -275,124 +274,19 @@ fn main() {
 
         let mut triggered_authentication = false;
 
-        match open_rx
-            .try_next()
-            .ok()
-            .flatten()
-            .and_then(|urls| OpenRequest::parse(urls, cx).log_err())
-        {
-            Some(request) => {
-                triggered_authentication = handle_open_request(request, app_state.clone(), cx)
-            }
-            None => cx
-                .spawn({
-                    let app_state = app_state.clone();
-                    |cx| async move { restore_or_create_workspace(app_state, cx).await }
-                })
-                .detach(),
-        }
-
-        let app_state = app_state.clone();
-        cx.spawn(move |cx| async move {
-            while let Some(urls) = open_rx.next().await {
-                cx.update(|cx| {
-                    if let Some(request) = OpenRequest::parse(urls, cx).log_err() {
-                        handle_open_request(request, app_state.clone(), cx);
-                    }
-                })
-                .ok();
-            }
+        cx.spawn({
+            let app_state = app_state.clone();
+            |cx| async move { restore_or_create_workspace(app_state, cx).await }
         })
         .detach();
+
+        let app_state = app_state.clone();
 
         if !triggered_authentication {
             cx.spawn(|cx| async move { authenticate(client, &cx).await })
                 .detach_and_log_err(cx);
         }
     });
-}
-
-fn handle_open_request(
-    request: OpenRequest,
-    app_state: Arc<AppState>,
-    cx: &mut AppContext,
-) -> bool {
-    if let Some(connection) = request.cli_connection {
-        let app_state = app_state.clone();
-        cx.spawn(move |cx| handle_cli_connection(connection, app_state, cx))
-            .detach();
-        return false;
-    }
-
-    let mut task = None;
-    if !request.open_paths.is_empty() {
-        let app_state = app_state.clone();
-        task = Some(cx.spawn(|mut cx| async move {
-            let (_window, results) = open_paths_with_positions(
-                &request.open_paths,
-                app_state,
-                workspace::OpenOptions::default(),
-                &mut cx,
-            )
-            .await?;
-            for result in results.into_iter().flatten() {
-                if let Err(err) = result {
-                    log::error!("Error opening path: {err}",);
-                }
-            }
-            anyhow::Ok(())
-        }));
-    }
-
-    if !request.open_channel_notes.is_empty() || request.join_channel.is_some() {
-        cx.spawn(|mut cx| async move {
-            if let Some(task) = task {
-                task.await?;
-            }
-            let client = app_state.client.clone();
-            // we continue even if authentication fails as join_channel/ open channel notes will
-            // show a visible error message.
-            authenticate(client, &cx).await.log_err();
-
-            if let Some(channel_id) = request.join_channel {
-                cx.update(|cx| {
-                    workspace::join_channel(
-                        client::ChannelId(channel_id),
-                        app_state.clone(),
-                        None,
-                        cx,
-                    )
-                })?
-                .await?;
-            }
-
-            let workspace_window =
-                workspace::get_any_active_workspace(app_state, cx.clone()).await?;
-            let workspace = workspace_window.root_view(&cx)?;
-
-            let mut promises = Vec::new();
-            for (channel_id, heading) in request.open_channel_notes {
-                promises.push(cx.update_window(workspace_window.into(), |_, cx| {
-                    ChannelView::open(
-                        client::ChannelId(channel_id),
-                        heading,
-                        workspace.clone(),
-                        cx,
-                    )
-                    .log_err()
-                })?)
-            }
-            future::join_all(promises).await;
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
-        true
-    } else {
-        if let Some(task) = task {
-            task.detach_and_log_err(cx)
-        }
-        false
-    }
 }
 
 async fn authenticate(client: Arc<Client>, cx: &AsyncAppContext) -> Result<()> {
