@@ -103,7 +103,7 @@ fn main() {
         })
     };
 
-    let (listener, mut open_rx) = OpenListener::new();
+    let (listener, mut _open_rx) = OpenListener::new();
     let listener = Arc::new(listener);
     let open_listener = listener.clone();
     app.on_open_urls(move |urls| open_listener.open_urls(urls));
@@ -272,32 +272,12 @@ fn main() {
             listener.open_urls(urls)
         }
 
-        let mut triggered_authentication = false;
-
         cx.spawn({
             let app_state = app_state.clone();
             |cx| async move { restore_or_create_workspace(app_state, cx).await }
         })
         .detach();
-
-        let app_state = app_state.clone();
-
-        if !triggered_authentication {
-            cx.spawn(|cx| async move { authenticate(client, &cx).await })
-                .detach_and_log_err(cx);
-        }
     });
-}
-
-async fn authenticate(client: Arc<Client>, cx: &AsyncAppContext) -> Result<()> {
-    if stdout_is_a_pty() {
-        if client::IMPERSONATE_LOGIN.is_some() {
-            client.authenticate_and_connect(false, &cx).await?;
-        }
-    } else if client.has_keychain_credentials(&cx).await {
-        client.authenticate_and_connect(true, &cx).await?;
-    }
-    Ok::<_, anyhow::Error>(())
 }
 
 async fn installation_id() -> Result<(String, bool)> {
