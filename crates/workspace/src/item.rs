@@ -192,10 +192,6 @@ pub trait Item: FocusableView + EventEmitter<Self::Event> {
         }
     }
 
-    fn as_searchable(&self, _: &View<Self>) -> Option<Box<dyn SearchableItemHandle>> {
-        None
-    }
-
     fn breadcrumb_location(&self) -> ToolbarItemLocation {
         ToolbarItemLocation::Hidden
     }
@@ -214,7 +210,6 @@ pub trait Item: FocusableView + EventEmitter<Self::Event> {
         _project: Model<Project>,
         _workspace: WeakView<Workspace>,
         _workspace_id: WorkspaceId,
-        _item_id: ItemId,
         _cx: &mut ViewContext<Pane>,
     ) -> Task<Result<View<Self>>> {
         unimplemented!(
@@ -289,7 +284,6 @@ pub trait ItemHandle: 'static + Send {
         cx: &mut AppContext,
         callback: Box<dyn FnOnce(&mut AppContext) + Send>,
     ) -> gpui::Subscription;
-    fn to_searchable_item_handle(&self, cx: &AppContext) -> Option<Box<dyn SearchableItemHandle>>;
     fn breadcrumb_location(&self, cx: &AppContext) -> ToolbarItemLocation;
     fn breadcrumbs(&self, theme: &Theme, cx: &AppContext) -> Option<Vec<BreadcrumbText>>;
     fn serialized_item_kind(&self) -> Option<&'static str>;

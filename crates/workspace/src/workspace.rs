@@ -1,7 +1,7 @@
 pub mod dock;
 pub mod item;
 mod modal_layer;
-pub mod notifications;
+//pub mod notifications;
 pub mod pane;
 pub mod pane_group;
 //mod persistence;
