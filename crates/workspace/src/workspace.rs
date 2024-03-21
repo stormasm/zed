@@ -11,13 +11,13 @@ mod status_bar;
 mod toolbar;
 mod workspace_settings;
 
-use dock::{Dock, DockPosition, Panel, PanelButtons, PanelHandle};
+use dock::{DockPosition, Panel, PanelHandle};
 use gpui::*;
-use item::{FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, ProjectItem};
+use item::{FollowableItem, FollowableItemHandle, Item, ItemHandle, ProjectItem};
 pub use pane::*;
 pub use pane_group::*;
+use task::SpawnInTerminal;
 pub use toolbar::{Toolbar, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView};
-
 pub use workspace_settings::{AutosaveSetting, WorkspaceSettings};
 
 use serde::Deserialize;
@@ -102,7 +102,6 @@ impl Workspace {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ViewId {
-    pub creator: PeerId,
     pub id: u64,
 }
 
