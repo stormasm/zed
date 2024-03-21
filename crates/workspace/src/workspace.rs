@@ -11,6 +11,7 @@ mod status_bar;
 mod toolbar;
 mod workspace_settings;
 
+use dock::{Dock, DockPosition, Panel, PanelButtons, PanelHandle};
 use gpui::*;
 use item::{FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, ProjectItem};
 pub use pane::*;
@@ -65,7 +66,31 @@ actions!(
     ]
 );
 
-pub struct Workspace {}
+pub struct Workspace {
+    app_state: Arc<AppState>,
+}
+
+impl Workspace {
+    pub fn app_state(&self) -> &Arc<AppState> {
+        &self.app_state
+    }
+
+    pub fn go_back(
+        &mut self,
+        pane: WeakView<Pane>,
+        cx: &mut ViewContext<Workspace>,
+    ) -> Task<Result<()>> {
+        self.navigate_history(pane, NavigationMode::GoingBack, cx)
+    }
+
+    pub fn go_forward(
+        &mut self,
+        pane: WeakView<Pane>,
+        cx: &mut ViewContext<Workspace>,
+    ) -> Task<Result<()>> {
+        self.navigate_history(pane, NavigationMode::GoingForward, cx)
+    }
+}
 
 pub struct AppState {
     //pub languages: Arc<LanguageRegistry>,
