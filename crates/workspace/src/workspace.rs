@@ -23,7 +23,6 @@ pub use workspace_settings::{AutosaveSetting, WorkspaceSettings};
 use serde::Deserialize;
 use std::{
     borrow::Cow,
-    cmp,
     hash::{Hash, Hasher},
     sync::Arc,
 };

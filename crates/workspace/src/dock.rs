@@ -1,4 +1,4 @@
-use crate::persistence::model::DockData;
+//use crate::persistence::model::DockData;
 use crate::DraggedDock;
 use crate::{status_bar::StatusItemView, Workspace};
 use gpui::{
@@ -146,7 +146,7 @@ pub struct Dock {
     is_open: bool,
     active_panel_index: usize,
     focus_handle: FocusHandle,
-    pub(crate) serialized_dock: Option<DockData>,
+    //pub(crate) serialized_dock: Option<DockData>,
     _focus_subscription: Subscription,
 }
 
