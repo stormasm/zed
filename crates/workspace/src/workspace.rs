@@ -13,7 +13,7 @@ mod workspace_settings;
 
 use dock::{DockPosition, Panel, PanelHandle};
 use gpui::*;
-use item::{FollowableItem, FollowableItemHandle, Item, ItemHandle, ProjectItem};
+use item::{Item, ItemHandle};
 pub use pane::*;
 pub use pane_group::*;
 use task::SpawnInTerminal;
