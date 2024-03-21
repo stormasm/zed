@@ -1,6 +1,6 @@
 pub mod file_associations;
 mod project_panel_settings;
-use client::{ErrorCode};
+use client::ErrorCode;
 use settings::Settings;
 
 use db::kvp::KEY_VALUE_STORE;
