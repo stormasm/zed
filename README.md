@@ -1,49 +1,15 @@
-# Zed
+branch _wsd0b_ basically takes you down to 2 errors where item.rs is
+the only issue to resolve...
 
-[![CI](https://github.com/zed-industries/zed/actions/workflows/ci.yml/badge.svg)](https://github.com/zed-industries/zed/actions/workflows/ci.yml)
+so what I have done is dramatically pruned back workspace.rs and then
+gone from there to this point where we need to now address item.rs
 
-Welcome to Zed, a high-performance, multiplayer code editor from the creators of [Atom](https://github.com/atom/atom) and [Tree-sitter](https://github.com/tree-sitter/tree-sitter).
+we started with a clean workspace crate and removed workspace.rs and
+then built it back up to the state its in on this branch.
 
-## Installation
+and got to a place where there are two errors with item.rs
 
-You can [download](https://zed.dev/download) Zed today for macOS (v10.15+).
+now we need to leverage this code and knowledge to move forward.
 
-Support for additional platforms is on our [roadmap](https://zed.dev/roadmap):
-
-- Linux ([tracking issue](https://github.com/zed-industries/zed/issues/7015))
-- Windows ([tracking issue](https://github.com/zed-industries/zed/issues/5394))
-- Web ([tracking issue](https://github.com/zed-industries/zed/issues/5396))
-
-For macOS users, you can also install Zed using [Homebrew](https://brew.sh/):
-
-```sh
-brew install zed
-```
-
-Alternatively, to install the Preview release:
-
-```sh
-brew tap homebrew/cask-versions
-brew install zed-preview
-```
-
-## Developing Zed
-
-- [Building Zed for macOS](./docs/src/developing_zed__building_zed_macos.md)
-- [Building Zed for Linux](./docs/src/developing_zed__building_zed_linux.md)
-- [Building Zed for Windows](./docs/src/developing_zed__building_zed_windows.md)
-- [Running Collaboration Locally](./docs/src/developing_zed__local_collaboration.md)
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for ways you can contribute to Zed.
-
-## Licensing
-
-License information for third party dependencies must be correctly provided for CI to pass.
-
-We use [`cargo-about`](https://github.com/EmbarkStudios/cargo-about) to automatically comply with open source licenses. If CI is failing, check the following:
-
-- Is it showing a `no license specified` error for a crate you've created? If so, add `publish = false` under `[package]` in your crate's Cargo.toml.
-- Is the error `failed to satisfy license requirements` for a dependency? If so, first determine what license the project has and whether this system is sufficient to comply with this license's requirements. If you're unsure, ask a lawyer. Once you've verified that this system is acceptable add the license's SPDX identifier to the `accepted` array in `script/licenses/zed-licenses.toml`.
-- Is `cargo-about` unable to find the license for a dependency? If so, add a clarification field at the end of `script/licenses/zed-licenses.toml`, as specified in the [cargo-about book](https://embarkstudios.github.io/cargo-about/cli/generate/config.html#crate-configuration).
+the goal is to get a clean compilation of workspace so we can see
+how it works with a very reduced workspace.rs and item.rs
