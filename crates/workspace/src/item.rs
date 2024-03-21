@@ -507,10 +507,6 @@ impl<T: Item> ItemHandle for View<T> {
             })
             .detach();
         }
-
-        cx.defer(|workspace, cx| {
-            workspace.serialize_workspace(cx).detach();
-        });
     }
 
     fn deactivated(&self, cx: &mut WindowContext) {

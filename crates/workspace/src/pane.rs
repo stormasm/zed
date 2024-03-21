@@ -5,8 +5,7 @@ use crate::{
     NewCenterTerminal, NewFile, NewSearch, SplitDirection, ToggleZoom, Workspace,
 };
 use anyhow::Result;
-use collections::{HashMap, HashSet, VecDeque};
-use futures::StreamExt;
+use collections::{HashMap, VecDeque};
 use gpui::{
     actions, impl_actions, overlay, prelude::*, Action, AnchorCorner, AnyElement, AppContext,
     AsyncWindowContext, ClickEvent, DismissEvent, Div, DragMoveEvent, EntityId, EventEmitter,

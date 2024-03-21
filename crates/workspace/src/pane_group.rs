@@ -491,7 +491,6 @@ mod element {
     use settings::Settings;
     use smallvec::SmallVec;
     use ui::prelude::*;
-    use util::ResultExt;
 
     use crate::Workspace;
 
@@ -633,9 +632,6 @@ mod element {
                 proposed_current_pixel_change -= current_pixel_change;
             }
 
-            workspace
-                .update(cx, |this, cx| this.schedule_serialize(cx))
-                .log_err();
             cx.stop_propagation();
             cx.refresh();
         }
@@ -802,27 +798,6 @@ mod element {
                         cx.theme().colors().border,
                     ));
 
-                    cx.on_mouse_event({
-                        let dragged_handle = layout.dragged_handle.clone();
-                        let flexes = self.flexes.clone();
-                        let workspace = self.workspace.clone();
-                        let handle_hitbox = handle.hitbox.clone();
-                        move |e: &MouseDownEvent, phase, cx| {
-                            if phase.bubble() && handle_hitbox.is_hovered(cx) {
-                                dragged_handle.replace(Some(ix));
-                                if e.click_count >= 2 {
-                                    let mut borrow = flexes.lock();
-                                    *borrow = vec![1.; borrow.len()];
-                                    workspace
-                                        .update(cx, |this, cx| this.schedule_serialize(cx))
-                                        .log_err();
-
-                                    cx.refresh();
-                                }
-                                cx.stop_propagation();
-                            }
-                        }
-                    });
                     cx.on_mouse_event({
                         let workspace = self.workspace.clone();
                         let dragged_handle = layout.dragged_handle.clone();
