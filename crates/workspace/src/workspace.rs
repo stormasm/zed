@@ -11,9 +11,9 @@ mod status_bar;
 mod toolbar;
 mod workspace_settings;
 
-use dock::{DockPosition, Panel, PanelHandle};
+use dock::DockPosition;
 use gpui::*;
-use item::{Item, ItemHandle};
+use item::ItemHandle;
 pub use pane::*;
 pub use pane_group::*;
 use task::SpawnInTerminal;
@@ -21,11 +21,7 @@ pub use toolbar::{Toolbar, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemVie
 pub use workspace_settings::{AutosaveSetting, WorkspaceSettings};
 
 use serde::Deserialize;
-use std::{
-    borrow::Cow,
-    hash::{Hash, Hasher},
-    sync::Arc,
-};
+use std::{borrow::Cow, hash::Hash, sync::Arc};
 use uuid::Uuid;
 
 #[derive(Clone, Render)]

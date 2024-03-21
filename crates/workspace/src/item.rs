@@ -2,15 +2,13 @@ use crate::{
     pane::{self, Pane},
     //persistence::model::ItemId,
     //searchable::SearchableItemHandle,
-    workspace_settings::{AutosaveSetting, WorkspaceSettings},
+    //workspace_settings::{AutosaveSetting, WorkspaceSettings},
     ItemNavHistory,
     ToolbarItemLocation,
     Workspace,
     WorkspaceId,
 };
 use anyhow::Result;
-use client::proto::{self};
-use futures::{channel::mpsc, StreamExt};
 use gpui::{
     AnyElement, AnyView, AppContext, Entity, EntityId, EventEmitter, FocusHandle, FocusableView,
     HighlightStyle, Model, Pixels, Point, SharedString, Task, View, ViewContext, WeakView,
@@ -23,10 +21,8 @@ use settings::Settings;
 use smallvec::SmallVec;
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
     ops::Range,
     path::PathBuf,
-    rc::Rc,
     time::Duration,
 };
 use theme::Theme;
@@ -415,46 +411,8 @@ impl<T: Item> ItemHandle for View<T> {
             .is_none()
         {
             //let mut pending_autosave = DelayedDebouncedEditAction::new();
-            let (pending_update_tx, mut pending_update_rx) = mpsc::unbounded();
-            let pending_update = Rc::new(RefCell::new(None));
-
-            let mut send_follower_updates = None;
-            if let Some(item) = self.to_followable_item_handle(cx) {
-                let is_project_item = item.is_project_item(cx);
-                let item = item.downgrade();
-
-                send_follower_updates = Some(cx.spawn({
-                    let pending_update = pending_update.clone();
-                    |workspace, mut cx| async move {
-                        while let Some(mut leader_id) = pending_update_rx.next().await {
-                            while let Ok(Some(id)) = pending_update_rx.try_next() {
-                                leader_id = id;
-                            }
-
-                            workspace.update(&mut cx, |workspace, cx| {
-                                let item = item.upgrade().expect(
-                                    "item to be alive, otherwise task would have been dropped",
-                                );
-                                workspace.update_followers(
-                                    is_project_item,
-                                    proto::update_followers::Variant::UpdateView(
-                                        proto::UpdateView {
-                                            id: item
-                                                .remote_id(workspace.client(), cx)
-                                                .map(|id| id.to_proto()),
-                                            variant: pending_update.borrow_mut().take(),
-                                            leader_id,
-                                        },
-                                    ),
-                                    cx,
-                                );
-                            })?;
-                            cx.background_executor().timer(LEADER_UPDATE_THROTTLE).await;
-                        }
-                        anyhow::Ok(())
-                    }
-                }));
-            }
+            //let (pending_update_tx, mut pending_update_rx) = mpsc::unbounded();
+            //clet pending_update = Rc::new(RefCell::new(None));
 
             let mut event_subscription =
                 Some(cx.subscribe(self, move |workspace, item, event, cx| {
@@ -489,21 +447,10 @@ impl<T: Item> ItemHandle for View<T> {
                     });
                 }));
 
-            cx.on_blur(&self.focus_handle(cx), move |workspace, cx| {
-                if WorkspaceSettings::get_global(cx).autosave == AutosaveSetting::OnFocusChange {
-                    if let Some(item) = weak_item.upgrade() {
-                        Pane::autosave_item(&item, workspace.project.clone(), cx)
-                            .detach_and_log_err(cx);
-                    }
-                }
-            })
-            .detach();
-
             let item_id = self.item_id();
             cx.observe_release(self, move |workspace, _, _| {
                 workspace.panes_by_item.remove(&item_id);
                 event_subscription.take();
-                send_follower_updates.take();
             })
             .detach();
         }
