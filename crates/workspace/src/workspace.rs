@@ -694,139 +694,6 @@ impl Workspace {
         }
     }
 
-    fn new_local(
-        abs_paths: Vec<PathBuf>,
-        app_state: Arc<AppState>,
-        requesting_window: Option<WindowHandle<Workspace>>,
-        cx: &mut AppContext,
-    ) -> Task<
-        anyhow::Result<(
-            WindowHandle<Workspace>,
-            Vec<Option<Result<Box<dyn ItemHandle>, anyhow::Error>>>,
-        )>,
-    > {
-        let project_handle = Project::local(
-            app_state.client.clone(),
-            app_state.node_runtime.clone(),
-            app_state.user_store.clone(),
-            app_state.languages.clone(),
-            app_state.fs.clone(),
-            cx,
-        );
-
-        cx.spawn(|mut cx| async move {
-            let serialized_workspace: Option<SerializedWorkspace> =
-                persistence::DB.workspace_for_roots(abs_paths.as_slice());
-
-            let paths_to_open = Arc::new(abs_paths);
-
-            // Get project paths for all of the abs_paths
-            let mut worktree_roots: HashSet<Arc<Path>> = Default::default();
-            let mut project_paths: Vec<(PathBuf, Option<ProjectPath>)> =
-                Vec::with_capacity(paths_to_open.len());
-            for path in paths_to_open.iter().cloned() {
-                if let Some((worktree, project_entry)) = cx
-                    .update(|cx| {
-                        Workspace::project_path_for_path(project_handle.clone(), &path, true, cx)
-                    })?
-                    .await
-                    .log_err()
-                {
-                    worktree_roots.extend(worktree.update(&mut cx, |tree, _| tree.abs_path()).ok());
-                    project_paths.push((path, Some(project_entry)));
-                } else {
-                    project_paths.push((path, None));
-                }
-            }
-
-            let workspace_id = if let Some(serialized_workspace) = serialized_workspace.as_ref() {
-                serialized_workspace.id
-            } else {
-                DB.next_id().await.unwrap_or_else(|_| Default::default())
-            };
-
-            let window = if let Some(window) = requesting_window {
-                cx.update_window(window.into(), |_, cx| {
-                    cx.replace_root_view(|cx| {
-                        Workspace::new(workspace_id, project_handle.clone(), app_state.clone(), cx)
-                    });
-                })?;
-                window
-            } else {
-                let window_bounds_override = window_bounds_env_override(&cx);
-
-                let (bounds, display, fullscreen) = if let Some(bounds) = window_bounds_override {
-                    (Some(bounds), None, false)
-                } else {
-                    let restorable_bounds = serialized_workspace
-                        .as_ref()
-                        .and_then(|workspace| {
-                            Some((workspace.display?, workspace.bounds?, workspace.fullscreen))
-                        })
-                        .or_else(|| {
-                            let (display, bounds, fullscreen) = DB.last_window().log_err()?;
-                            Some((display?, bounds?.0, fullscreen.unwrap_or(false)))
-                        });
-
-                    if let Some((serialized_display, mut bounds, fullscreen)) = restorable_bounds {
-                        // Stored bounds are relative to the containing display.
-                        // So convert back to global coordinates if that screen still exists
-                        let screen_bounds = cx
-                            .update(|cx| {
-                                cx.displays()
-                                    .into_iter()
-                                    .find(|display| display.uuid().ok() == Some(serialized_display))
-                            })
-                            .ok()
-                            .flatten()
-                            .map(|screen| screen.bounds());
-
-                        if let Some(screen_bounds) = screen_bounds {
-                            bounds.origin.x += screen_bounds.origin.x;
-                            bounds.origin.y += screen_bounds.origin.y;
-                        }
-
-                        (Some(bounds), Some(serialized_display), fullscreen)
-                    } else {
-                        (None, None, false)
-                    }
-                };
-
-                // Use the serialized workspace to construct the new window
-                let mut options = cx.update(|cx| (app_state.build_window_options)(display, cx))?;
-                options.bounds = bounds;
-                options.fullscreen = fullscreen;
-                cx.open_window(options, {
-                    let app_state = app_state.clone();
-                    let project_handle = project_handle.clone();
-                    move |cx| {
-                        cx.new_view(|cx| {
-                            Workspace::new(workspace_id, project_handle, app_state, cx)
-                        })
-                    }
-                })?
-            };
-
-            notify_if_database_failed(window, &mut cx);
-            let opened_items = window
-                .update(&mut cx, |_workspace, cx| {
-                    open_items(serialized_workspace, project_paths, app_state, cx)
-                })?
-                .await
-                .unwrap_or_default();
-
-            window
-                .update(&mut cx, |workspace, cx| {
-                    workspace
-                        .refresh_recent_documents(cx)
-                        .detach_and_log_err(cx);
-                    cx.activate_window()
-                })
-                .log_err();
-            Ok((window, opened_items))
-        })
-    }
-
     pub fn weak_handle(&self) -> WeakView<Self> {
         self.weak_self.clone()
     }
@@ -978,41 +845,7 @@ impl Workspace {
             None
         };
 
-        if let Some((project_path, entry)) = to_load {
-            // If the item was no longer present, then load it again from its previous path.
-            let task = self.load_path(project_path, cx);
-            cx.spawn(|workspace, mut cx| async move {
-                let task = task.await;
-                let mut navigated = false;
-                if let Some((project_entry_id, build_item)) = task.log_err() {
-                    let prev_active_item_id = pane.update(&mut cx, |pane, _| {
-                        pane.nav_history_mut().set_mode(mode);
-                        pane.active_item().map(|p| p.item_id())
-                    })?;
-
-                    pane.update(&mut cx, |pane, cx| {
-                        let item = pane.open_item(project_entry_id, true, cx, build_item);
-                        navigated |= Some(item.item_id()) != prev_active_item_id;
-                        pane.nav_history_mut().set_mode(NavigationMode::Normal);
-                        if let Some(data) = entry.data {
-                            navigated |= item.navigate(data, cx);
-                        }
-                    })?;
-                }
-
-                if !navigated {
-                    workspace
-                        .update(&mut cx, |workspace, cx| {
-                            Self::navigate_history(workspace, pane, mode, cx)
-                        })?
-                        .await?;
-                }
-
-                Ok(())
-            })
-        } else {
-            Task::ready(Ok(()))
-        }
+        Task::ready(Ok(()))
     }
 
     pub fn go_back(
@@ -1050,30 +883,6 @@ impl Workspace {
 
     pub fn titlebar_item(&self) -> Option<AnyView> {
         self.titlebar_item.clone()
-    }
-
-    /// Call the given callback with a workspace whose project is local.
-    ///
-    /// If the given workspace has a local project, then it will be passed
-    /// to the callback. Otherwise, a new empty window will be created.
-    pub fn with_local_workspace<T, F>(
-        &mut self,
-        cx: &mut ViewContext<Self>,
-        callback: F,
-    ) -> Task<Result<T>>
-    where
-        T: 'static,
-        F: 'static + FnOnce(&mut Workspace, &mut ViewContext<Workspace>) -> T,
-    {
-        if self.project.read(cx).is_local() {
-            Task::Ready(Some(Ok(callback(self, cx))))
-        } else {
-            let task = Self::new_local(Vec::new(), self.app_state.clone(), None, cx);
-            cx.spawn(|_vh, mut cx| async move {
-                let (workspace, _) = task.await?;
-                workspace.update(&mut cx, callback)
-            })
-        }
     }
 
     pub fn worktrees<'a>(&self, cx: &'a AppContext) -> impl 'a + Iterator<Item = Model<Worktree>> {
@@ -2570,97 +2379,6 @@ fn window_bounds_env_override(cx: &AsyncAppContext) -> Option<Bounds<GlobalPixel
         })
 }
 
-fn open_items(
-    serialized_workspace: Option<SerializedWorkspace>,
-    mut project_paths_to_open: Vec<(PathBuf, Option<ProjectPath>)>,
-    app_state: Arc<AppState>,
-    cx: &mut ViewContext<Workspace>,
-) -> impl 'static + Future<Output = Result<Vec<Option<Result<Box<dyn ItemHandle>>>>>> {
-    let restored_items = serialized_workspace.map(|serialized_workspace| {
-        Workspace::load_workspace(
-            serialized_workspace,
-            project_paths_to_open
-                .iter()
-                .map(|(_, project_path)| project_path)
-                .cloned()
-                .collect(),
-            cx,
-        )
-    });
-
-    cx.spawn(|workspace, mut cx| async move {
-        let mut opened_items = Vec::with_capacity(project_paths_to_open.len());
-
-        if let Some(restored_items) = restored_items {
-            let restored_items = restored_items.await?;
-
-            let restored_project_paths = restored_items
-                .iter()
-                .filter_map(|item| {
-                    cx.update(|cx| item.as_ref()?.project_path(cx))
-                        .ok()
-                        .flatten()
-                })
-                .collect::<HashSet<_>>();
-
-            for restored_item in restored_items {
-                opened_items.push(restored_item.map(Ok));
-            }
-
-            project_paths_to_open
-                .iter_mut()
-                .for_each(|(_, project_path)| {
-                    if let Some(project_path_to_open) = project_path {
-                        if restored_project_paths.contains(project_path_to_open) {
-                            *project_path = None;
-                        }
-                    }
-                });
-        } else {
-            for _ in 0..project_paths_to_open.len() {
-                opened_items.push(None);
-            }
-        }
-        assert!(opened_items.len() == project_paths_to_open.len());
-
-        let tasks =
-            project_paths_to_open
-                .into_iter()
-                .enumerate()
-                .map(|(ix, (abs_path, project_path))| {
-                    let workspace = workspace.clone();
-                    cx.spawn(|mut cx| {
-                        let fs = app_state.fs.clone();
-                        async move {
-                            let file_project_path = project_path?;
-                            if fs.is_dir(&abs_path).await {
-                                None
-                            } else {
-                                Some((
-                                    ix,
-                                    workspace
-                                        .update(&mut cx, |workspace, cx| {
-                                            workspace.open_path(file_project_path, None, true, cx)
-                                        })
-                                        .log_err()?
-                                        .await,
-                                ))
-                            }
-                        }
-                    })
-                });
-
-        let tasks = tasks.collect::<Vec<_>>();
-
-        let tasks = futures::future::join_all(tasks);
-        for (ix, path_open_result) in tasks.await.into_iter().flatten() {
-            opened_items[ix] = Some(path_open_result);
-        }
-
-        Ok(opened_items)
-    })
-}
-
 enum ActivateInDirectionTarget {
     Pane(View<Pane>),
     Dock(View<Dock>),
@@ -2918,8 +2636,7 @@ pub async fn get_any_active_workspace(
     // find an existing workspace to focus and show call controls
     let active_window = activate_any_workspace_window(&mut cx);
     if active_window.is_none() {
-        cx.update(|cx| Workspace::new_local(vec![], app_state.clone(), None, cx))?
-            .await?;
+        println!("active_window.is_none()");
     }
     activate_any_workspace_window(&mut cx).context("could not open zed")
 }
@@ -2963,25 +2680,6 @@ fn local_workspace_windows(cx: &AppContext) -> Vec<WindowHandle<Workspace>> {
 pub struct OpenOptions {
     pub open_new_workspace: Option<bool>,
     pub replace_window: Option<WindowHandle<Workspace>>,
-}
-
-pub fn open_new(
-    app_state: Arc<AppState>,
-    cx: &mut AppContext,
-    init: impl FnOnce(&mut Workspace, &mut ViewContext<Workspace>) + 'static + Send,
-) -> Task<()> {
-    let task = Workspace::new_local(Vec::new(), app_state, None, cx);
-    cx.spawn(|mut cx| async move {
-        if let Some((workspace, opened_paths)) = task.await.log_err() {
-            workspace
-                .update(&mut cx, |workspace, cx| {
-                    if opened_paths.is_empty() {
-                        init(workspace, cx)
-                    }
-                })
-                .log_err();
-        }
-    })
 }
 
 pub fn restart(_: &Restart, cx: &mut AppContext) {
