@@ -20,6 +20,13 @@ pub use toolbar::{Toolbar, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemVie
 
 pub use workspace_settings::{AutosaveSetting, WorkspaceSettings};
 
+use std::{
+    borrow::Cow,
+    cmp,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
+
 #[derive(Clone, Render)]
 struct DraggedDock(DockPosition);
 
@@ -91,6 +98,17 @@ impl Workspace {
         self.navigate_history(pane, NavigationMode::GoingForward, cx)
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ViewId {
+    pub creator: PeerId,
+    pub id: u64,
+}
+
+/*
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct WorkspaceId(i64);
+*/
 
 pub struct AppState {
     //pub languages: Arc<LanguageRegistry>,
