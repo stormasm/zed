@@ -193,18 +193,6 @@ pub fn render_parsed_markdown(
         element_id,
         StyledText::new(parsed.text.clone()).with_highlights(&editor_style.text, highlights),
     )
-    .on_click(link_ranges, move |clicked_range_ix, cx| {
-        match &links[clicked_range_ix] {
-            markdown::Link::Web { url } => cx.open_url(url),
-            markdown::Link::Path { path } => {
-                if let Some(workspace) = &workspace {
-                    _ = workspace.update(cx, |workspace, cx| {
-                        workspace.open_abs_path(path.clone(), false, cx).detach();
-                    });
-                }
-            }
-        }
-    })
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -249,25 +237,6 @@ pub fn init(cx: &mut AppContext) {
         },
     )
     .detach();
-
-    cx.on_action(move |_: &workspace::NewFile, cx| {
-        let app_state = workspace::AppState::global(cx);
-        if let Some(app_state) = app_state.upgrade() {
-            workspace::open_new(app_state, cx, |workspace, cx| {
-                Editor::new_file(workspace, &Default::default(), cx)
-            })
-            .detach();
-        }
-    });
-    cx.on_action(move |_: &workspace::NewWindow, cx| {
-        let app_state = workspace::AppState::global(cx);
-        if let Some(app_state) = app_state.upgrade() {
-            workspace::open_new(app_state, cx, |workspace, cx| {
-                Editor::new_file(workspace, &Default::default(), cx)
-            })
-            .detach();
-        }
-    });
 }
 
 trait InvalidationRegion {
@@ -9604,6 +9573,7 @@ impl Editor {
         });
     }
 
+    /*
     fn jump(
         &mut self,
         path: ProjectPath,
@@ -9615,7 +9585,7 @@ impl Editor {
         cx.spawn(|_, mut cx| async move {
             let workspace = workspace.ok_or_else(|| anyhow!("cannot jump without workspace"))?;
             let editor = workspace.update(&mut cx, |workspace, cx| {
-                workspace.open_path(path, None, true, cx)
+
             })?;
             let editor = editor
                 .await?
@@ -9648,6 +9618,7 @@ impl Editor {
         })
         .detach_and_log_err(cx);
     }
+    */
 
     fn marked_text_ranges(&self, cx: &AppContext) -> Option<Vec<Range<OffsetUtf16>>> {
         let snapshot = self.buffer.read(cx).read(cx);

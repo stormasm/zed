@@ -1400,10 +1400,6 @@ impl EditorElement {
                             .as_ref()
                             .map_or(range.context.start, |primary| primary.start);
                         let jump_position = language::ToPoint::to_point(&jump_anchor, buffer);
-
-                        cx.listener_for(&self.editor, move |editor, _, cx| {
-                            editor.jump(jump_path.clone(), jump_position, jump_anchor, cx);
-                        })
                     });
 
                     let element = if *starts_new_buffer {
@@ -1453,21 +1449,7 @@ impl EditorElement {
                                                     )
                                                 }),
                                         ),
-                                    )
-                                    .when_some(jump_handler, |this, jump_handler| {
-                                        this.cursor_pointer()
-                                            .tooltip(|cx| {
-                                                Tooltip::for_action(
-                                                    "Jump to Buffer",
-                                                    &OpenExcerpts,
-                                                    cx,
-                                                )
-                                            })
-                                            .on_mouse_down(MouseButton::Left, |_, cx| {
-                                                cx.stop_propagation()
-                                            })
-                                            .on_click(jump_handler)
-                                    }),
+                                    ),
                             )
                     } else {
                         h_flex()
@@ -1498,12 +1480,7 @@ impl EditorElement {
                                             .group_hover("", |style| {
                                                 style.bg(cx.theme().colors().border)
                                             }),
-                                    )
-                                    .when_some(jump_handler, |this, jump_handler| {
-                                        this.on_click(jump_handler).tooltip(|cx| {
-                                            Tooltip::for_action("Jump to Buffer", &OpenExcerpts, cx)
-                                        })
-                                    }),
+                                    ),
                             )
                     };
                     element.into_any()
