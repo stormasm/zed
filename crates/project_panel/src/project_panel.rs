@@ -1,6 +1,6 @@
 pub mod file_associations;
 mod project_panel_settings;
-use client::{ErrorCode, ErrorExt};
+use client::{ErrorCode};
 use settings::Settings;
 
 use db::kvp::KEY_VALUE_STORE;
@@ -36,7 +36,6 @@ use unicase::UniCase;
 use util::{maybe, NumericPrefixWithSuffix, ResultExt, TryFutureExt};
 use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
-    notifications::DetachAndPromptErr,
     Workspace,
 };
 

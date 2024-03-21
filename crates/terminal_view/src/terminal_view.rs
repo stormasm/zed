@@ -34,7 +34,6 @@ use workspace::{
     WorkspaceId,
 };
 
-use anyhow::Context;
 use dirs::home_dir;
 use serde::Deserialize;
 use settings::Settings;
