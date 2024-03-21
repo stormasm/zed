@@ -1,5 +1,5 @@
 use crate::markdown_elements::{
-    HeadingLevel, Link, ParsedMarkdown, ParsedMarkdownBlockQuote, ParsedMarkdownCodeBlock,
+    HeadingLevel, ParsedMarkdown, ParsedMarkdownBlockQuote, ParsedMarkdownCodeBlock,
     ParsedMarkdownElement, ParsedMarkdownHeading, ParsedMarkdownList, ParsedMarkdownListItemType,
     ParsedMarkdownTable, ParsedMarkdownTableAlignment, ParsedMarkdownTableRow, ParsedMarkdownText,
 };
@@ -312,24 +312,11 @@ fn render_markdown_text(parsed: &ParsedMarkdownText, cx: &mut RenderContext) -> 
         }
     }
 
-    let workspace = cx.workspace.clone();
+    let _workspace = cx.workspace.clone();
 
     InteractiveText::new(
         element_id,
         StyledText::new(parsed.contents.clone()).with_highlights(&cx.text_style, highlights),
-    )
-    .on_click(
-        link_ranges,
-        move |clicked_range_ix, window_cx| match &links[clicked_range_ix] {
-            Link::Web { url } => window_cx.open_url(url),
-            Link::Path { path } => {
-                if let Some(workspace) = &workspace {
-                    _ = workspace.update(window_cx, |workspace, cx| {
-                        workspace.open_abs_path(path.clone(), false, cx).detach();
-                    });
-                }
-            }
-        },
     )
     .into_any_element()
 }

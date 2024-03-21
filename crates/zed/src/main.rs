@@ -249,8 +249,8 @@ fn main() {
         call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
         feedback::init(cx);
-        markdown_preview::init(cx);
-        welcome::init(cx);
+        //markdown_preview::init(cx);
+        //welcome::init(cx);
         extensions_ui::init(cx);
 
         cx.set_menus(app_menus());
