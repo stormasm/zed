@@ -257,30 +257,6 @@ pub fn init(app_state: Arc<AppState>, cx: &mut AppContext) {
 
     cx.on_action(Workspace::close_global);
     cx.on_action(restart);
-
-    cx.on_action({
-        let app_state = Arc::downgrade(&app_state);
-        move |_: &Open, cx: &mut AppContext| {
-            let paths = cx.prompt_for_paths(PathPromptOptions {
-                files: true,
-                directories: true,
-                multiple: true,
-            });
-
-            if let Some(app_state) = app_state.upgrade() {
-                cx.spawn(move |cx| async move {
-                    if let Some(paths) = paths.await.log_err().flatten() {
-                        cx.update(|cx| {
-                            open_paths(&paths, app_state, OpenOptions::default(), cx)
-                                .detach_and_log_err(cx)
-                        })
-                        .ok();
-                    }
-                })
-                .detach();
-            }
-        }
-    });
 }
 
 #[derive(Clone, Default, Deref, DerefMut)]
@@ -1295,210 +1271,6 @@ impl Workspace {
         })
     }
 
-    pub fn open(&mut self, _: &Open, cx: &mut ViewContext<Self>) {
-        self.client()
-            .telemetry()
-            .report_app_event("open project".to_string());
-        let paths = cx.prompt_for_paths(PathPromptOptions {
-            files: true,
-            directories: true,
-            multiple: true,
-        });
-
-        cx.spawn(|this, mut cx| async move {
-            let Some(paths) = paths.await.log_err().flatten() else {
-                return;
-            };
-
-            if let Some(task) = this
-                .update(&mut cx, |this, cx| {
-                    this.open_workspace_for_paths(false, paths, cx)
-                })
-                .log_err()
-            {
-                task.await.log_err();
-            }
-        })
-        .detach()
-    }
-
-    pub fn open_workspace_for_paths(
-        &mut self,
-        replace_current_window: bool,
-        paths: Vec<PathBuf>,
-        cx: &mut ViewContext<Self>,
-    ) -> Task<Result<()>> {
-        let window = cx.window_handle().downcast::<Self>();
-        let is_remote = self.project.read(cx).is_remote();
-        let has_worktree = self.project.read(cx).worktrees().next().is_some();
-        let has_dirty_items = self.items(cx).any(|item| item.is_dirty(cx));
-
-        let window_to_replace = if replace_current_window {
-            window
-        } else if is_remote || has_worktree || has_dirty_items {
-            None
-        } else {
-            window
-        };
-        let app_state = self.app_state.clone();
-
-        cx.spawn(|_, mut cx| async move {
-            cx.update(|cx| {
-                open_paths(
-                    &paths,
-                    app_state,
-                    OpenOptions {
-                        replace_window: window_to_replace,
-                        ..Default::default()
-                    },
-                    cx,
-                )
-            })?
-            .await?;
-            Ok(())
-        })
-    }
-
-    #[allow(clippy::type_complexity)]
-    pub fn open_paths(
-        &mut self,
-        mut abs_paths: Vec<PathBuf>,
-        visible: OpenVisible,
-        pane: Option<WeakView<Pane>>,
-        cx: &mut ViewContext<Self>,
-    ) -> Task<Vec<Option<Result<Box<dyn ItemHandle>, anyhow::Error>>>> {
-        log::info!("open paths {abs_paths:?}");
-
-        let fs = self.app_state.fs.clone();
-
-        // Sort the paths to ensure we add worktrees for parents before their children.
-        abs_paths.sort_unstable();
-        cx.spawn(move |this, mut cx| async move {
-            let mut tasks = Vec::with_capacity(abs_paths.len());
-
-            for abs_path in &abs_paths {
-                let visible = match visible {
-                    OpenVisible::All => Some(true),
-                    OpenVisible::None => Some(false),
-                    OpenVisible::OnlyFiles => match fs.metadata(abs_path).await.log_err() {
-                        Some(Some(metadata)) => Some(!metadata.is_dir),
-                        Some(None) => Some(true),
-                        None => None,
-                    },
-                    OpenVisible::OnlyDirectories => match fs.metadata(abs_path).await.log_err() {
-                        Some(Some(metadata)) => Some(metadata.is_dir),
-                        Some(None) => Some(false),
-                        None => None,
-                    },
-                };
-                let project_path = match visible {
-                    Some(visible) => match this
-                        .update(&mut cx, |this, cx| {
-                            Workspace::project_path_for_path(
-                                this.project.clone(),
-                                abs_path,
-                                visible,
-                                cx,
-                            )
-                        })
-                        .log_err()
-                    {
-                        Some(project_path) => project_path.await.log_err(),
-                        None => None,
-                    },
-                    None => None,
-                };
-
-                let this = this.clone();
-                let abs_path = abs_path.clone();
-                let fs = fs.clone();
-                let pane = pane.clone();
-                let task = cx.spawn(move |mut cx| async move {
-                    let (worktree, project_path) = project_path?;
-                    if fs.is_dir(&abs_path).await {
-                        this.update(&mut cx, |workspace, cx| {
-                            let worktree = worktree.read(cx);
-                            let worktree_abs_path = worktree.abs_path();
-                            let entry_id = if abs_path == worktree_abs_path.as_ref() {
-                                worktree.root_entry()
-                            } else {
-                                abs_path
-                                    .strip_prefix(worktree_abs_path.as_ref())
-                                    .ok()
-                                    .and_then(|relative_path| {
-                                        worktree.entry_for_path(relative_path)
-                                    })
-                            }
-                            .map(|entry| entry.id);
-                            if let Some(entry_id) = entry_id {
-                                workspace.project.update(cx, |_, cx| {
-                                    cx.emit(project::Event::ActiveEntryChanged(Some(entry_id)));
-                                })
-                            }
-                        })
-                        .log_err()?;
-                        None
-                    } else {
-                        Some(
-                            this.update(&mut cx, |this, cx| {
-                                this.open_path(project_path, pane, true, cx)
-                            })
-                            .log_err()?
-                            .await,
-                        )
-                    }
-                });
-                tasks.push(task);
-            }
-
-            futures::future::join_all(tasks).await
-        })
-    }
-
-    fn add_folder_to_project(&mut self, _: &AddFolderToProject, cx: &mut ViewContext<Self>) {
-        let paths = cx.prompt_for_paths(PathPromptOptions {
-            files: false,
-            directories: true,
-            multiple: true,
-        });
-        cx.spawn(|this, mut cx| async move {
-            if let Some(paths) = paths.await.log_err().flatten() {
-                let results = this
-                    .update(&mut cx, |this, cx| {
-                        this.open_paths(paths, OpenVisible::All, None, cx)
-                    })?
-                    .await;
-                for result in results.into_iter().flatten() {
-                    result.log_err();
-                }
-            }
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
-    }
-
-    fn project_path_for_path(
-        project: Model<Project>,
-        abs_path: &Path,
-        visible: bool,
-        cx: &mut AppContext,
-    ) -> Task<Result<(Model<Worktree>, ProjectPath)>> {
-        let entry = project.update(cx, |project, cx| {
-            project.find_or_create_local_worktree(abs_path, visible, cx)
-        });
-        cx.spawn(|mut cx| async move {
-            let (worktree, path) = entry.await?;
-            let worktree_id = worktree.update(&mut cx, |t, _| t.id())?;
-            Ok((
-                worktree,
-                ProjectPath {
-                    worktree_id,
-                    path: path.into(),
-                },
-            ))
-        })
-    }
-
     pub fn items<'a>(
         &'a self,
         cx: &'a AppContext,
@@ -1852,134 +1624,6 @@ impl Workspace {
         self.add_item(new_pane, item, cx);
     }
 
-    pub fn open_abs_path(
-        &mut self,
-        abs_path: PathBuf,
-        visible: bool,
-        cx: &mut ViewContext<Self>,
-    ) -> Task<anyhow::Result<Box<dyn ItemHandle>>> {
-        cx.spawn(|workspace, mut cx| async move {
-            let open_paths_task_result = workspace
-                .update(&mut cx, |workspace, cx| {
-                    workspace.open_paths(
-                        vec![abs_path.clone()],
-                        if visible {
-                            OpenVisible::All
-                        } else {
-                            OpenVisible::None
-                        },
-                        None,
-                        cx,
-                    )
-                })
-                .with_context(|| format!("open abs path {abs_path:?} task spawn"))?
-                .await;
-            anyhow::ensure!(
-                open_paths_task_result.len() == 1,
-                "open abs path {abs_path:?} task returned incorrect number of results"
-            );
-            match open_paths_task_result
-                .into_iter()
-                .next()
-                .expect("ensured single task result")
-            {
-                Some(open_result) => {
-                    open_result.with_context(|| format!("open abs path {abs_path:?} task join"))
-                }
-                None => anyhow::bail!("open abs path {abs_path:?} task returned None"),
-            }
-        })
-    }
-
-    pub fn split_abs_path(
-        &mut self,
-        abs_path: PathBuf,
-        visible: bool,
-        cx: &mut ViewContext<Self>,
-    ) -> Task<anyhow::Result<Box<dyn ItemHandle>>> {
-        let project_path_task =
-            Workspace::project_path_for_path(self.project.clone(), &abs_path, visible, cx);
-        cx.spawn(|this, mut cx| async move {
-            let (_, path) = project_path_task.await?;
-            this.update(&mut cx, |this, cx| this.split_path(path, cx))?
-                .await
-        })
-    }
-
-    pub fn open_path(
-        &mut self,
-        path: impl Into<ProjectPath>,
-        pane: Option<WeakView<Pane>>,
-        focus_item: bool,
-        cx: &mut WindowContext,
-    ) -> Task<Result<Box<dyn ItemHandle>, anyhow::Error>> {
-        let pane = pane.unwrap_or_else(|| {
-            self.last_active_center_pane.clone().unwrap_or_else(|| {
-                self.panes
-                    .first()
-                    .expect("There must be an active pane")
-                    .downgrade()
-            })
-        });
-
-        let task = self.load_path(path.into(), cx);
-        cx.spawn(move |mut cx| async move {
-            let (project_entry_id, build_item) = task.await?;
-            pane.update(&mut cx, |pane, cx| {
-                pane.open_item(project_entry_id, focus_item, cx, build_item)
-            })
-        })
-    }
-
-    pub fn split_path(
-        &mut self,
-        path: impl Into<ProjectPath>,
-        cx: &mut ViewContext<Self>,
-    ) -> Task<Result<Box<dyn ItemHandle>, anyhow::Error>> {
-        let pane = self.last_active_center_pane.clone().unwrap_or_else(|| {
-            self.panes
-                .first()
-                .expect("There must be an active pane")
-                .downgrade()
-        });
-
-        if let Member::Pane(center_pane) = &self.center.root {
-            if center_pane.read(cx).items_len() == 0 {
-                return self.open_path(path, Some(pane), true, cx);
-            }
-        }
-
-        let task = self.load_path(path.into(), cx);
-        cx.spawn(|this, mut cx| async move {
-            let (project_entry_id, build_item) = task.await?;
-            this.update(&mut cx, move |this, cx| -> Option<_> {
-                let pane = pane.upgrade()?;
-                let new_pane = this.split_pane(pane, SplitDirection::Right, cx);
-                new_pane.update(cx, |new_pane, cx| {
-                    Some(new_pane.open_item(project_entry_id, true, cx, build_item))
-                })
-            })
-            .map(|option| option.ok_or_else(|| anyhow!("pane was dropped")))?
-        })
-    }
-
-    fn load_path(
-        &mut self,
-        path: ProjectPath,
-        cx: &mut WindowContext,
-    ) -> Task<Result<(Option<ProjectEntryId>, WorkspaceItemBuilder)>> {
-        let project = self.project().clone();
-        let project_item_builders = cx.default_global::<ProjectItemOpeners>().clone();
-        let Some(open_project_item) = project_item_builders
-            .iter()
-            .rev()
-            .find_map(|open_project_item| open_project_item(&project, &path, cx))
-        else {
-            return Task::ready(Err(anyhow!("cannot open file {:?}", path.path)));
-        };
-        open_project_item
-    }
-
     pub fn open_project_item<T>(
         &mut self,
         pane: View<Pane>,
@@ -2317,27 +1961,6 @@ impl Workspace {
             .split(&pane_to_split, &new_pane, split_direction)
             .unwrap();
         cx.notify();
-    }
-
-    pub fn split_pane_with_project_entry(
-        &mut self,
-        pane_to_split: WeakView<Pane>,
-        split_direction: SplitDirection,
-        project_entry: ProjectEntryId,
-        cx: &mut ViewContext<Self>,
-    ) -> Option<Task<Result<()>>> {
-        let pane_to_split = pane_to_split.upgrade()?;
-        let new_pane = self.add_pane(cx);
-        self.center
-            .split(&pane_to_split, &new_pane, split_direction)
-            .unwrap();
-
-        let path = self.project.read(cx).path_for_entry(project_entry, cx)?;
-        let task = self.open_path(path, Some(new_pane.downgrade()), true, cx);
-        Some(cx.foreground_executor().spawn(async move {
-            task.await?;
-            Ok(())
-        }))
     }
 
     pub fn move_item(
@@ -2813,7 +2436,6 @@ impl Workspace {
             .on_action(cx.listener(Self::close_all_items_and_panes))
             .on_action(cx.listener(Self::save_all))
             .on_action(cx.listener(Self::send_keystrokes))
-            .on_action(cx.listener(Self::add_folder_to_project))
             .on_action(cx.listener(|workspace, action: &Save, cx| {
                 workspace
                     .save_active_item(action.save_intent.unwrap_or(SaveIntent::Save), cx)
@@ -2861,7 +2483,6 @@ impl Workspace {
                     workspace.close_all_docks(cx);
                 }),
             )
-            .on_action(cx.listener(Workspace::open))
             .on_action(cx.listener(Workspace::close_window))
             .on_action(cx.listener(Workspace::activate_pane_at_index))
             .on_action(
@@ -2913,9 +2534,7 @@ impl Workspace {
         let mut div = div
             .on_action(cx.listener(Self::close_inactive_items_and_panes))
             .on_action(cx.listener(Self::close_all_items_and_panes))
-            .on_action(cx.listener(Self::add_folder_to_project))
-            .on_action(cx.listener(Self::save_all))
-            .on_action(cx.listener(Self::open));
+            .on_action(cx.listener(Self::save_all));
         for action in self.workspace_actions.iter() {
             div = (action)(div, cx)
         }
@@ -3346,89 +2965,6 @@ pub struct OpenOptions {
     pub replace_window: Option<WindowHandle<Workspace>>,
 }
 
-#[allow(clippy::type_complexity)]
-pub fn open_paths(
-    abs_paths: &[PathBuf],
-    app_state: Arc<AppState>,
-    open_options: OpenOptions,
-    cx: &mut AppContext,
-) -> Task<
-    anyhow::Result<(
-        WindowHandle<Workspace>,
-        Vec<Option<Result<Box<dyn ItemHandle>, anyhow::Error>>>,
-    )>,
-> {
-    let abs_paths = abs_paths.to_vec();
-    let mut existing = None;
-    let mut best_match = None;
-    let mut open_visible = OpenVisible::All;
-
-    if open_options.open_new_workspace != Some(true) {
-        for window in local_workspace_windows(cx) {
-            if let Ok(workspace) = window.read(cx) {
-                let m = workspace
-                    .project
-                    .read(cx)
-                    .visibility_for_paths(&abs_paths, cx);
-                if m > best_match {
-                    existing = Some(window);
-                    best_match = m;
-                } else if best_match.is_none() && open_options.open_new_workspace == Some(false) {
-                    existing = Some(window)
-                }
-            }
-        }
-    }
-
-    cx.spawn(move |mut cx| async move {
-        if open_options.open_new_workspace.is_none() && existing.is_none() {
-            let all_files = abs_paths.iter().map(|path| app_state.fs.metadata(path));
-            if futures::future::join_all(all_files)
-                .await
-                .into_iter()
-                .filter_map(|result| result.ok().flatten())
-                .all(|file| !file.is_dir)
-            {
-                cx.update(|cx| {
-                    for window in local_workspace_windows(cx) {
-                        if let Ok(workspace) = window.read(cx) {
-                            let project = workspace.project().read(cx);
-                            if project.is_remote() {
-                                continue;
-                            }
-                            existing = Some(window);
-                            open_visible = OpenVisible::None;
-                            break;
-                        }
-                    }
-                })?;
-            }
-        }
-
-        if let Some(existing) = existing {
-            Ok((
-                existing,
-                existing
-                    .update(&mut cx, |workspace, cx| {
-                        cx.activate_window();
-                        workspace.open_paths(abs_paths, open_visible, None, cx)
-                    })?
-                    .await,
-            ))
-        } else {
-            cx.update(move |cx| {
-                Workspace::new_local(
-                    abs_paths,
-                    app_state.clone(),
-                    open_options.replace_window,
-                    cx,
-                )
-            })?
-            .await
-        }
-    })
-}
-
 pub fn open_new(
     app_state: Arc<AppState>,
     cx: &mut AppContext,
@@ -3445,33 +2981,6 @@ pub fn open_new(
                 })
                 .log_err();
         }
-    })
-}
-
-pub fn create_and_open_local_file(
-    path: &'static Path,
-    cx: &mut ViewContext<Workspace>,
-    default_content: impl 'static + Send + FnOnce() -> Rope,
-) -> Task<Result<Box<dyn ItemHandle>>> {
-    cx.spawn(|workspace, mut cx| async move {
-        let fs = workspace.update(&mut cx, |workspace, _| workspace.app_state().fs.clone())?;
-        if !fs.is_file(path).await {
-            fs.create_file(path, Default::default()).await?;
-            fs.save(path, &default_content(), Default::default())
-                .await?;
-        }
-
-        let mut items = workspace
-            .update(&mut cx, |workspace, cx| {
-                workspace.with_local_workspace(cx, |workspace, cx| {
-                    workspace.open_paths(vec![path.to_path_buf()], OpenVisible::None, None, cx)
-                })
-            })?
-            .await?
-            .await;
-
-        let item = items.pop().flatten();
-        item.ok_or_else(|| anyhow!("path {path:?} is not a file"))?
     })
 }
 
