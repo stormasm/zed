@@ -283,6 +283,7 @@ define_connection! {
     ];
 }
 
+#[allow(dead_code)]
 impl WorkspaceDb {
     /// Returns a serialized workspace for the given worktree_roots. If the passed array
     /// is empty, the most recent workspace is returned instead. If no workspace for the

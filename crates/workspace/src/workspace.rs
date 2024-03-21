@@ -20,12 +20,11 @@ use gpui::{
     actions, canvas, impl_actions, point, size, Action, AnyElement, AnyView, AnyWeakView,
     AppContext, AsyncAppContext, Bounds, DragMoveEvent, Entity as _, EntityId, EventEmitter,
     FocusHandle, FocusableView, Global, GlobalPixels, KeyContext, Keystroke, LayoutId, ManagedView,
-    Model, PathPromptOptions, Point, PromptLevel, Render, Size, Task, View, WeakView, WindowHandle,
-    WindowOptions,
+    Model, Point, PromptLevel, Render, Size, Task, View, WeakView, WindowHandle, WindowOptions,
 };
 use item::{Item, ItemHandle, ItemSettings, ProjectItem};
 use itertools::Itertools;
-use language::{LanguageRegistry, Rope};
+use language::LanguageRegistry;
 use lazy_static::lazy_static;
 pub use modal_layer::*;
 use node_runtime::NodeRuntime;
@@ -55,7 +54,7 @@ use std::{
     collections::hash_map::DefaultHasher,
     env,
     hash::{Hash, Hasher},
-    path::{Path, PathBuf},
+    path::PathBuf,
     rc::Rc,
     sync::{atomic::AtomicUsize, Arc, Weak},
     time::Duration,
@@ -65,7 +64,7 @@ use theme::{ActiveTheme, SystemAppearance, ThemeSettings};
 pub use toolbar::{Toolbar, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView};
 pub use ui;
 use ui::{
-    div, Context as _, Div, Element, ElementContext, InteractiveElement as _, IntoElement, Label,
+    div, Div, Element, ElementContext, InteractiveElement as _, IntoElement, Label,
     ParentElement as _, Pixels, Styled as _, ViewContext, VisualContext as _, WindowContext,
 };
 use util::ResultExt;
@@ -251,7 +250,7 @@ pub fn init_settings(cx: &mut AppContext) {
     ItemSettings::register(cx);
 }
 
-pub fn init(app_state: Arc<AppState>, cx: &mut AppContext) {
+pub fn init(_app_state: Arc<AppState>, cx: &mut AppContext) {
     init_settings(cx);
     notifications::init(cx);
 
@@ -804,7 +803,7 @@ impl Workspace {
         mode: NavigationMode,
         cx: &mut ViewContext<Workspace>,
     ) -> Task<Result<()>> {
-        let to_load = if let Some(pane) = pane.upgrade() {
+        let _to_load = if let Some(pane) = pane.upgrade() {
             pane.update(cx, |pane, cx| {
                 pane.focus(cx);
                 loop {
@@ -1970,6 +1969,7 @@ impl Workspace {
         }
     }
 
+    #[allow(dead_code)]
     fn remove_panes(&mut self, member: Member, cx: &mut ViewContext<Workspace>) {
         match member {
             Member::Axis(PaneAxis { members, .. }) => {
@@ -2150,6 +2150,7 @@ impl Workspace {
         })
     }
 
+    #[allow(dead_code)]
     pub(crate) fn load_workspace(
         serialized_workspace: SerializedWorkspace,
         paths_to_open: Vec<Option<ProjectPath>>,
@@ -2367,39 +2368,9 @@ impl Workspace {
     }
 }
 
-fn window_bounds_env_override(cx: &AsyncAppContext) -> Option<Bounds<GlobalPixels>> {
-    let display_origin = cx
-        .update(|cx| Some(cx.displays().first()?.bounds().origin))
-        .ok()??;
-    ZED_WINDOW_POSITION
-        .zip(*ZED_WINDOW_SIZE)
-        .map(|(position, size)| Bounds {
-            origin: display_origin + position,
-            size,
-        })
-}
-
 enum ActivateInDirectionTarget {
     Pane(View<Pane>),
     Dock(View<Dock>),
-}
-
-fn notify_if_database_failed(workspace: WindowHandle<Workspace>, cx: &mut AsyncAppContext) {
-    const REPORT_ISSUE_URL: &str = "https://github.com/zed-industries/zed/issues/new?assignees=&labels=defect%2Ctriage&template=2_bug_report.yml";
-
-    workspace
-        .update(cx, |workspace, cx| {
-            if (*db::ALL_FILE_DB_FAILED).load(std::sync::atomic::Ordering::Acquire) {
-                workspace.show_notification_once(0, cx, |cx| {
-                    cx.new_view(|_| {
-                        MessageNotification::new("Failed to load the database file.")
-                            .with_click_message("Click to let us know about this error")
-                            .on_click(|cx| cx.open_url(REPORT_ISSUE_URL))
-                    })
-                });
-            }
-        })
-        .log_err();
 }
 
 impl FocusableView for Workspace {
@@ -2630,7 +2601,7 @@ actions!(collab, [OpenChannelNotes]);
 actions!(zed, [OpenLog]);
 
 pub async fn get_any_active_workspace(
-    app_state: Arc<AppState>,
+    _app_state: Arc<AppState>,
     mut cx: AsyncAppContext,
 ) -> anyhow::Result<WindowHandle<Workspace>> {
     // find an existing workspace to focus and show call controls
@@ -2664,6 +2635,7 @@ fn activate_any_workspace_window(cx: &mut AsyncAppContext) -> Option<WindowHandl
     .flatten()
 }
 
+#[allow(dead_code)]
 fn local_workspace_windows(cx: &AppContext) -> Vec<WindowHandle<Workspace>> {
     cx.windows()
         .into_iter()

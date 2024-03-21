@@ -19,6 +19,7 @@ pub struct PaneGroup {
     pub(crate) root: Member,
 }
 
+#[allow(dead_code)]
 impl PaneGroup {
     pub(crate) fn with_root(root: Member) -> Self {
         Self { root }
@@ -141,6 +142,7 @@ impl Member {
         }
     }
 
+    #[allow(dead_code)]
     fn first_pane(&self) -> View<Pane> {
         match self {
             Member::Axis(axis) => axis.members[0].first_pane(),

@@ -157,6 +157,7 @@ impl Default for SerializedPaneGroup {
     }
 }
 
+#[allow(dead_code)]
 impl SerializedPaneGroup {
     #[async_recursion(?Send)]
     pub(crate) async fn deserialize(
@@ -236,6 +237,7 @@ impl SerializedPane {
         SerializedPane { children, active }
     }
 
+    #[allow(dead_code)]
     pub async fn deserialize_to(
         &self,
         project: &Model<Project>,
