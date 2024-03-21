@@ -7,7 +7,7 @@ use anyhow::{anyhow, Context as _, Result};
 use backtrace::Backtrace;
 use chrono::Utc;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
-use client::{parse_zed_link, Client, UserStore};
+use client::{Client, UserStore};
 use db::kvp::KEY_VALUE_STORE;
 use editor::Editor;
 use env_logger::Builder;
@@ -55,7 +55,7 @@ use welcome::{show_welcome_view, BaseKeymap, FIRST_OPEN};
 use workspace::AppState;
 use zed::{
     app_menus, build_window_options, ensure_only_instance, handle_keymap_file_changes,
-    initialize_workspace, IsOnlyInstance, OpenListener,
+    initialize_workspace, IsOnlyInstance,
 };
 
 #[global_allocator]
@@ -103,10 +103,6 @@ fn main() {
         })
     };
 
-    let (listener, mut _open_rx) = OpenListener::new();
-    let listener = Arc::new(listener);
-    let open_listener = listener.clone();
-    app.on_open_urls(move |urls| open_listener.open_urls(urls));
     app.on_reopen(move |cx| {
         if let Some(app_state) = AppState::try_global(cx).and_then(|app_state| app_state.upgrade())
         {
@@ -124,8 +120,6 @@ fn main() {
         }
 
         SystemAppearance::init(cx);
-        OpenListener::set_global(listener.clone(), cx);
-
         load_embedded_fonts(cx);
 
         let mut store = SettingsStore::default();
@@ -266,11 +260,6 @@ fn main() {
         upload_panics_and_crashes(http.clone(), cx);
 
         cx.activate(true);
-
-        let urls = collect_url_args(cx);
-        if !urls.is_empty() {
-            listener.open_urls(urls)
-        }
 
         cx.spawn({
             let app_state = app_state.clone();
@@ -768,25 +757,6 @@ async fn load_login_shell_environment() -> Result<()> {
 
 fn stdout_is_a_pty() -> bool {
     std::env::var(FORCE_CLI_MODE_ENV_VAR_NAME).ok().is_none() && std::io::stdout().is_terminal()
-}
-
-fn collect_url_args(cx: &AppContext) -> Vec<String> {
-    env::args()
-        .skip(1)
-        .filter_map(|arg| match std::fs::canonicalize(Path::new(&arg)) {
-            Ok(path) => Some(format!("file://{}", path.to_string_lossy())),
-            Err(error) => {
-                if arg.starts_with("file://") || arg.starts_with("zed-cli://") {
-                    Some(arg)
-                } else if let Some(_) = parse_zed_link(&arg, cx) {
-                    Some(arg)
-                } else {
-                    log::error!("error parsing path argument: {}", error);
-                    None
-                }
-            }
-        })
-        .collect()
 }
 
 fn load_embedded_fonts(cx: &AppContext) {
