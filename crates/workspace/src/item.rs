@@ -3,8 +3,8 @@ use crate::{
     persistence::model::ItemId,
     searchable::SearchableItemHandle,
     workspace_settings::{AutosaveSetting, WorkspaceSettings},
-    DelayedDebouncedEditAction, FollowableItemBuilders, ItemNavHistory, ToolbarItemLocation,
-    ViewId, Workspace, WorkspaceId,
+    DelayedDebouncedEditAction, ItemNavHistory, ToolbarItemLocation, ViewId, Workspace,
+    WorkspaceId,
 };
 use anyhow::Result;
 use client::{
@@ -283,7 +283,6 @@ pub trait ItemHandle: 'static + Send {
     ) -> Task<Result<()>>;
     fn reload(&self, project: Model<Project>, cx: &mut WindowContext) -> Task<Result<()>>;
     fn act_as_type(&self, type_id: TypeId, cx: &AppContext) -> Option<AnyView>;
-    fn to_followable_item_handle(&self, cx: &AppContext) -> Option<Box<dyn FollowableItemHandle>>;
     fn on_release(
         &self,
         cx: &mut AppContext,
@@ -555,12 +554,6 @@ impl<T: Item> ItemHandle for View<T> {
 
     fn act_as_type<'a>(&'a self, type_id: TypeId, cx: &'a AppContext) -> Option<AnyView> {
         self.read(cx).act_as_type(type_id, self, cx)
-    }
-
-    fn to_followable_item_handle(&self, cx: &AppContext) -> Option<Box<dyn FollowableItemHandle>> {
-        let builders = cx.try_global::<FollowableItemBuilders>()?;
-        let item = self.to_any();
-        Some(builders.get(&item.entity_type())?.1(&item))
     }
 
     fn on_release(

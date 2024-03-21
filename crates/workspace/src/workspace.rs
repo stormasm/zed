@@ -11,10 +11,7 @@ mod toolbar;
 mod workspace_settings;
 
 use anyhow::{anyhow, Context as _, Result};
-use client::{
-    proto::{self, PeerId},
-    Client, UserStore,
-};
+use client::{proto::PeerId, Client, UserStore};
 use collections::{hash_map, HashMap, HashSet};
 use derive_more::{Deref, DerefMut};
 use dock::{Dock, DockPosition, Panel, PanelButtons, PanelHandle};
@@ -26,7 +23,7 @@ use gpui::{
     Model, PathPromptOptions, Point, PromptLevel, Render, Size, Task, View, WeakView, WindowHandle,
     WindowOptions,
 };
-use item::{FollowableItem, FollowableItemHandle, Item, ItemHandle, ItemSettings, ProjectItem};
+use item::{Item, ItemHandle, ItemSettings, ProjectItem};
 use itertools::Itertools;
 use language::{LanguageRegistry, Rope};
 use lazy_static::lazy_static;
@@ -319,43 +316,6 @@ pub fn register_project_item<I: ProjectItem>(cx: &mut AppContext) {
             Ok((project_entry_id, build_workspace_item))
         }))
     });
-}
-
-type FollowableItemBuilder = fn(
-    View<Pane>,
-    View<Workspace>,
-    ViewId,
-    &mut Option<proto::view::Variant>,
-    &mut WindowContext,
-) -> Option<Task<Result<Box<dyn FollowableItemHandle>>>>;
-
-#[derive(Default, Deref, DerefMut)]
-struct FollowableItemBuilders(
-    HashMap<
-        TypeId,
-        (
-            FollowableItemBuilder,
-            fn(&AnyView) -> Box<dyn FollowableItemHandle>,
-        ),
-    >,
-);
-
-impl Global for FollowableItemBuilders {}
-
-pub fn register_followable_item<I: FollowableItem>(cx: &mut AppContext) {
-    let builders = cx.default_global::<FollowableItemBuilders>();
-    builders.insert(
-        TypeId::of::<I>(),
-        (
-            |pane, workspace, id, state, cx| {
-                I::from_state_proto(pane, workspace, id, state, cx).map(|task| {
-                    cx.foreground_executor()
-                        .spawn(async move { Ok(Box::new(task.await?) as Box<_>) })
-                })
-            },
-            |this| Box::new(this.clone().downcast::<I>().unwrap()),
-        ),
-    );
 }
 
 #[derive(Default, Deref, DerefMut)]
