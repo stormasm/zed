@@ -2,11 +2,11 @@ use crate::{
     item::{ClosePosition, Item, ItemHandle, ItemSettings, WeakItemHandle},
     toolbar::Toolbar,
     workspace_settings::{AutosaveSetting, WorkspaceSettings},
-    NewCenterTerminal, NewFile, NewSearch, OpenVisible, SplitDirection, ToggleZoom, Workspace,
+    NewCenterTerminal, NewFile, NewSearch, SplitDirection, ToggleZoom, Workspace,
 };
 use anyhow::Result;
 use collections::{HashMap, HashSet, VecDeque};
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::StreamExt;
 use gpui::{
     actions, impl_actions, overlay, prelude::*, Action, AnchorCorner, AnyElement, AppContext,
     AsyncWindowContext, ClickEvent, DismissEvent, Div, DragMoveEvent, EntityId, EventEmitter,
@@ -961,7 +961,7 @@ impl Pane {
                     _ => {}
                 }
             }
-            let mut saved_project_items_ids = HashSet::default();
+            //let mut saved_project_items_ids = HashSet::default();
             for item in items_to_close.clone() {
                 // Find the item's current index and its set of project item models. Avoid
                 // storing these in advance, in case they have changed since this task
@@ -974,40 +974,6 @@ impl Pane {
                 } else {
                     continue;
                 };
-
-                // Check if this view has any project items that are not open anywhere else
-                // in the workspace, AND that the user has not already been prompted to save.
-                // If there are any such project entries, prompt the user to save this item.
-                let project = workspace.update(&mut cx, |workspace, cx| {
-                    for item in workspace.items(cx) {
-                        if !items_to_close
-                            .iter()
-                            .any(|item_to_close| item_to_close.item_id() == item.item_id())
-                        {
-                            let other_project_item_ids = item.project_item_model_ids(cx);
-                            project_item_ids.retain(|id| !other_project_item_ids.contains(id));
-                        }
-                    }
-                    workspace.project().clone()
-                })?;
-                let should_save = project_item_ids
-                    .iter()
-                    .any(|id| saved_project_items_ids.insert(*id));
-
-                if should_save
-                    && !Self::save_item(
-                        project.clone(),
-                        &pane,
-                        item_ix,
-                        &*item,
-                        save_intent,
-                        &mut cx,
-                    )
-                    .await?
-                {
-                    break;
-                }
-
                 // Remove the item from the pane.
                 pane.update(&mut cx, |pane, cx| {
                     if let Some(item_ix) = pane
@@ -1368,14 +1334,6 @@ impl Pane {
                 this.drag_split_direction = None;
                 this.handle_tab_drop(dragged_tab, ix, cx)
             }))
-            .on_drop(cx.listener(move |this, entry_id: &ProjectEntryId, cx| {
-                this.drag_split_direction = None;
-                this.handle_project_entry_drop(entry_id, cx)
-            }))
-            .on_drop(cx.listener(move |this, paths, cx| {
-                this.drag_split_direction = None;
-                this.handle_external_paths_drop(paths, cx)
-            }))
             .when_some(item.tab_tooltip_text(cx), |tab, text| {
                 tab.tooltip(move |cx| Tooltip::text(text.clone(), cx))
             })
@@ -1546,14 +1504,6 @@ impl Pane {
                     .on_drop(cx.listener(move |this, dragged_tab: &DraggedTab, cx| {
                         this.drag_split_direction = None;
                         this.handle_tab_drop(dragged_tab, this.items.len(), cx)
-                    }))
-                    .on_drop(cx.listener(move |this, entry_id: &ProjectEntryId, cx| {
-                        this.drag_split_direction = None;
-                        this.handle_project_entry_drop(entry_id, cx)
-                    }))
-                    .on_drop(cx.listener(move |this, paths, cx| {
-                        this.drag_split_direction = None;
-                        this.handle_external_paths_drop(paths, cx)
                     }))
                     .on_click(cx.listener(move |this, event: &ClickEvent, cx| {
                         if event.up.click_count == 2 {
@@ -1816,12 +1766,6 @@ impl Render for Pane {
                             })
                             .on_drop(cx.listener(move |this, dragged_tab, cx| {
                                 this.handle_tab_drop(dragged_tab, this.active_item_index(), cx)
-                            }))
-                            .on_drop(cx.listener(move |this, entry_id, cx| {
-                                this.handle_project_entry_drop(entry_id, cx)
-                            }))
-                            .on_drop(cx.listener(move |this, paths, cx| {
-                                this.handle_external_paths_drop(paths, cx)
                             }))
                             .map(|div| match self.drag_split_direction {
                                 None => div.top_0().left_0().right_0().bottom_0(),
