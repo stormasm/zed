@@ -1368,14 +1368,6 @@ impl Pane {
                 this.drag_split_direction = None;
                 this.handle_tab_drop(dragged_tab, ix, cx)
             }))
-            .on_drop(cx.listener(move |this, entry_id: &ProjectEntryId, cx| {
-                this.drag_split_direction = None;
-                this.handle_project_entry_drop(entry_id, cx)
-            }))
-            .on_drop(cx.listener(move |this, paths, cx| {
-                this.drag_split_direction = None;
-                this.handle_external_paths_drop(paths, cx)
-            }))
             .when_some(item.tab_tooltip_text(cx), |tab, text| {
                 tab.tooltip(move |cx| Tooltip::text(text.clone(), cx))
             })
@@ -1547,14 +1539,6 @@ impl Pane {
                         this.drag_split_direction = None;
                         this.handle_tab_drop(dragged_tab, this.items.len(), cx)
                     }))
-                    .on_drop(cx.listener(move |this, entry_id: &ProjectEntryId, cx| {
-                        this.drag_split_direction = None;
-                        this.handle_project_entry_drop(entry_id, cx)
-                    }))
-                    .on_drop(cx.listener(move |this, paths, cx| {
-                        this.drag_split_direction = None;
-                        this.handle_external_paths_drop(paths, cx)
-                    }))
                     .on_click(cx.listener(move |this, event: &ClickEvent, cx| {
                         if event.up.click_count == 2 {
                             cx.dispatch_action(this.double_click_dispatch_action.boxed_clone())
@@ -1665,94 +1649,6 @@ impl Pane {
                     }
                     workspace.move_item(from_pane, to_pane, item_id, ix, cx);
                 });
-            })
-            .log_err();
-    }
-
-    fn handle_project_entry_drop(
-        &mut self,
-        project_entry_id: &ProjectEntryId,
-        cx: &mut ViewContext<'_, Self>,
-    ) {
-        if let Some(custom_drop_handle) = self.custom_drop_handle.clone() {
-            if let ControlFlow::Break(()) = custom_drop_handle(self, project_entry_id, cx) {
-                return;
-            }
-        }
-        let mut to_pane = cx.view().clone();
-        let split_direction = self.drag_split_direction;
-        let project_entry_id = *project_entry_id;
-        self.workspace
-            .update(cx, |_, cx| {
-                cx.defer(move |workspace, cx| {
-                    if let Some(path) = workspace
-                        .project()
-                        .read(cx)
-                        .path_for_entry(project_entry_id, cx)
-                    {
-                        if let Some(split_direction) = split_direction {
-                            to_pane = workspace.split_pane(to_pane, split_direction, cx);
-                        }
-                        workspace
-                            .open_path(path, Some(to_pane.downgrade()), true, cx)
-                            .detach_and_log_err(cx);
-                    }
-                });
-            })
-            .log_err();
-    }
-
-    fn handle_external_paths_drop(
-        &mut self,
-        paths: &ExternalPaths,
-        cx: &mut ViewContext<'_, Self>,
-    ) {
-        if let Some(custom_drop_handle) = self.custom_drop_handle.clone() {
-            if let ControlFlow::Break(()) = custom_drop_handle(self, paths, cx) {
-                return;
-            }
-        }
-        let mut to_pane = cx.view().clone();
-        let mut split_direction = self.drag_split_direction;
-        let paths = paths.paths().to_vec();
-        self.workspace
-            .update(cx, |workspace, cx| {
-                let fs = Arc::clone(workspace.project().read(cx).fs());
-                cx.spawn(|workspace, mut cx| async move {
-                    let mut is_file_checks = FuturesUnordered::new();
-                    for path in &paths {
-                        is_file_checks.push(fs.is_file(path))
-                    }
-                    let mut has_files_to_open = false;
-                    while let Some(is_file) = is_file_checks.next().await {
-                        if is_file {
-                            has_files_to_open = true;
-                            break;
-                        }
-                    }
-                    drop(is_file_checks);
-                    if !has_files_to_open {
-                        split_direction = None;
-                    }
-
-                    if let Some(open_task) = workspace
-                        .update(&mut cx, |workspace, cx| {
-                            if let Some(split_direction) = split_direction {
-                                to_pane = workspace.split_pane(to_pane, split_direction, cx);
-                            }
-                            workspace.open_paths(
-                                paths,
-                                OpenVisible::OnlyDirectories,
-                                Some(to_pane.downgrade()),
-                                cx,
-                            )
-                        })
-                        .ok()
-                    {
-                        let _opened_items: Vec<_> = open_task.await;
-                    }
-                })
-                .detach();
             })
             .log_err();
     }
@@ -1904,12 +1800,6 @@ impl Render for Pane {
                             })
                             .on_drop(cx.listener(move |this, dragged_tab, cx| {
                                 this.handle_tab_drop(dragged_tab, this.active_item_index(), cx)
-                            }))
-                            .on_drop(cx.listener(move |this, entry_id, cx| {
-                                this.handle_project_entry_drop(entry_id, cx)
-                            }))
-                            .on_drop(cx.listener(move |this, paths, cx| {
-                                this.handle_external_paths_drop(paths, cx)
                             }))
                             .map(|div| match self.drag_split_direction {
                                 None => div.top_0().left_0().right_0().bottom_0(),
