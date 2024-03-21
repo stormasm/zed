@@ -1,3 +1,5 @@
+Branch _wsc0h_ remove other warnings from other crates
+
 Branch _wsc0g_ will remove all of the warnings from the workspace crate.
 
 Branch _wsc0d_ removed the file open_listener.rs and everything

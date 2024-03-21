@@ -50,7 +50,7 @@ use std::{
 use sum_tree::Bias;
 use theme::{ActiveTheme, PlayerColor};
 use ui::prelude::*;
-use ui::{h_flex, ButtonLike, ButtonStyle, Tooltip};
+use ui::{h_flex, ButtonLike, ButtonStyle};
 use util::ResultExt;
 use workspace::item::Item;
 
@@ -1390,8 +1390,8 @@ impl EditorElement {
                         .map(|project| project.read(cx).visible_worktrees(cx).count() > 1)
                         .unwrap_or_default();
 
-                    let jump_handler = project::File::from_dyn(buffer.file()).map(|file| {
-                        let jump_path = ProjectPath {
+                    let _jump_handler = project::File::from_dyn(buffer.file()).map(|file| {
+                        let _jump_path = ProjectPath {
                             worktree_id: file.worktree_id(cx),
                             path: file.path.clone(),
                         };
@@ -1399,7 +1399,7 @@ impl EditorElement {
                             .primary
                             .as_ref()
                             .map_or(range.context.start, |primary| primary.start);
-                        let jump_position = language::ToPoint::to_point(&jump_anchor, buffer);
+                        let _jump_position = language::ToPoint::to_point(&jump_anchor, buffer);
                     });
 
                     let element = if *starts_new_buffer {
