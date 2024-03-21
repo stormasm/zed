@@ -1,10 +1,12 @@
 use crate::{
     pane::{self, Pane},
-    persistence::model::ItemId,
-    searchable::SearchableItemHandle,
+    //persistence::model::ItemId,
+    //searchable::SearchableItemHandle,
     workspace_settings::{AutosaveSetting, WorkspaceSettings},
-    DelayedDebouncedEditAction, FollowableItemBuilders, ItemNavHistory, ToolbarItemLocation,
-    Workspace, WorkspaceId,
+    ItemNavHistory,
+    ToolbarItemLocation,
+    Workspace,
+    WorkspaceId,
 };
 use anyhow::Result;
 use client::proto::{self};
@@ -434,7 +436,7 @@ impl<T: Item> ItemHandle for View<T> {
             .insert(self.item_id(), pane.downgrade())
             .is_none()
         {
-            let mut pending_autosave = DelayedDebouncedEditAction::new();
+            //let mut pending_autosave = DelayedDebouncedEditAction::new();
             let (pending_update_tx, mut pending_update_rx) = mpsc::unbounded();
             let pending_update = Rc::new(RefCell::new(None));
 
@@ -503,17 +505,6 @@ impl<T: Item> ItemHandle for View<T> {
                                 cx.emit(pane::Event::ChangeItemTitle);
                                 cx.notify();
                             });
-                        }
-
-                        ItemEvent::Edit => {
-                            let autosave = WorkspaceSettings::get_global(cx).autosave;
-                            if let AutosaveSetting::AfterDelay { milliseconds } = autosave {
-                                let delay = Duration::from_millis(milliseconds);
-                                let item = item.clone();
-                                pending_autosave.fire_new(delay, cx, move |workspace, cx| {
-                                    Pane::autosave_item(&item, workspace.project().clone(), cx)
-                                });
-                            }
                         }
 
                         _ => {}
@@ -608,10 +599,6 @@ impl<T: Item> ItemHandle for View<T> {
         callback: Box<dyn FnOnce(&mut AppContext) + Send>,
     ) -> gpui::Subscription {
         cx.observe_release(self, move |_, cx| callback(cx))
-    }
-
-    fn to_searchable_item_handle(&self, cx: &AppContext) -> Option<Box<dyn SearchableItemHandle>> {
-        self.read(cx).as_searchable(self)
     }
 
     fn breadcrumb_location(&self, cx: &AppContext) -> ToolbarItemLocation {

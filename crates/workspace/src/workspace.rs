@@ -105,10 +105,8 @@ pub struct ViewId {
     pub id: u64,
 }
 
-/*
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct WorkspaceId(i64);
-*/
 
 pub struct AppState {
     //pub languages: Arc<LanguageRegistry>,
