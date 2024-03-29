@@ -1,12 +1,10 @@
 pub mod dock;
 pub mod item;
 mod modal_layer;
-pub mod notifications;
 pub mod pane;
 pub mod pane_group;
 mod persistence;
 pub mod searchable;
-pub mod shared_screen;
 mod status_bar;
 mod toolbar;
 mod workspace_settings;
@@ -263,7 +261,6 @@ pub fn init_settings(cx: &mut AppContext) {
 
 pub fn init(app_state: Arc<AppState>, cx: &mut AppContext) {
     init_settings(cx);
-    notifications::init(cx);
 
     cx.on_action(Workspace::close_global);
     cx.on_action(restart);
@@ -411,7 +408,6 @@ impl Global for GlobalAppState {}
 pub struct WorkspaceStore {
     workspaces: HashSet<WindowHandle<Workspace>>,
     client: Arc<Client>,
-    _subscriptions: Vec<client::Subscription>,
 }
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
@@ -3255,25 +3251,6 @@ impl Workspace {
                     }
                 });
             }
-        }
-    }
-
-    fn active_call(&self) -> Option<&Model<ActiveCall>> {
-        self.active_call.as_ref().map(|(call, _)| call)
-    }
-
-    fn on_active_call_event(
-        &mut self,
-        _: Model<ActiveCall>,
-        event: &call::room::Event,
-        cx: &mut ViewContext<Self>,
-    ) {
-        match event {
-            call::room::Event::ParticipantLocationChanged { participant_id }
-            | call::room::Event::RemoteVideoTracksChanged { participant_id } => {
-                self.leader_updated(*participant_id, cx);
-            }
-            _ => {}
         }
     }
 

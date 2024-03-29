@@ -12311,8 +12311,6 @@ dependencies = [
  "anyhow",
  "async-recursion 1.0.5",
  "bincode",
- "call",
- "client",
  "clock",
  "collections",
  "db",
