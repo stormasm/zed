@@ -12,3 +12,8 @@ over time so I can see a working version of the Welcome screen in the progressio
 ### Step 2 - branch wse0b
 
 - Remove features test-support from workspace and all of the associated crates which reference it
+
+### Step 3 - branch wse0c
+
+- Remove notifications.rs and shared_screen.rs
+- Remove the crate dependencies call and client from workspace/Cargo.toml
