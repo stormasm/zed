@@ -8,3 +8,7 @@ over time so I can see a working version of the Welcome screen in the progressio
 
 - In order to do this prettier support needs to be removed from Project
 - this involves removing -> crates/project/src/prettier_support.rs
+
+### Step 2 - branch wse0b
+
+- Remove features test-support from workspace and all of the associated crates which reference it

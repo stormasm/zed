@@ -12317,7 +12317,6 @@ dependencies = [
  "collections",
  "db",
  "derive_more",
- "env_logger",
  "fs",
  "futures 0.3.28",
  "gpui",

@@ -99,4 +99,4 @@ sqlx = { version = "0.7", features = ["sqlite"] }
 theme.workspace = true
 unindent.workspace = true
 util.workspace = true
-workspace = { workspace = true, features = ["test-support"] }
+workspace.workspace = true

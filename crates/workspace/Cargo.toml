@@ -12,17 +12,6 @@ workspace = true
 path = "src/workspace.rs"
 doctest = false
 
-[features]
-test-support = [
-    "call/test-support",
-    "client/test-support",
-    "db/test-support",
-    "project/test-support",
-    "settings/test-support",
-    "gpui/test-support",
-    "fs/test-support",
-]
-
 [dependencies]
 anyhow.workspace = true
 async-recursion.workspace = true
@@ -54,13 +43,3 @@ theme.workspace = true
 ui.workspace = true
 util.workspace = true
 uuid.workspace = true
-
-[dev-dependencies]
-call = { workspace = true, features = ["test-support"] }
-client = { workspace = true, features = ["test-support"] }
-db = { workspace = true, features = ["test-support"] }
-env_logger.workspace = true
-fs = { workspace = true, features = ["test-support"] }
-gpui = { workspace = true, features = ["test-support"] }
-project = { workspace = true, features = ["test-support"] }
-settings = { workspace = true, features = ["test-support"] }

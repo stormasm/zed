@@ -29,4 +29,4 @@ language = { workspace = true, features = ["test-support"] }
 project.workspace = true
 serde_json.workspace = true
 theme = { workspace = true, features = ["test-support"] }
-workspace = { workspace = true, features = ["test-support"] }
+workspace.workspace = true

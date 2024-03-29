@@ -52,4 +52,4 @@ lsp = { workspace = true, features = ["test-support"] }
 parking_lot.workspace = true
 settings.workspace = true
 util = { workspace = true, features = ["test-support"] }
-workspace = { workspace = true, features = ["test-support"] }
+workspace.workspace = true
