@@ -37,7 +37,6 @@ use itertools::Itertools;
 use language::{LanguageRegistry, Rope};
 use lazy_static::lazy_static;
 pub use modal_layer::*;
-use node_runtime::NodeRuntime;
 use notifications::{simple_message_notification::MessageNotification, NotificationHandle};
 pub use pane::*;
 pub use pane_group::*;
@@ -403,7 +402,6 @@ pub struct AppState {
     pub workspace_store: Model<WorkspaceStore>,
     pub fs: Arc<dyn fs::Fs>,
     pub build_window_options: fn(Option<Uuid>, &mut AppContext) -> WindowOptions,
-    pub node_runtime: Arc<dyn NodeRuntime>,
 }
 
 struct GlobalAppState(Weak<AppState>);
@@ -432,40 +430,6 @@ impl AppState {
     }
     pub fn set_global(state: Weak<AppState>, cx: &mut AppContext) {
         cx.set_global(GlobalAppState(state));
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn test(cx: &mut AppContext) -> Arc<Self> {
-        use node_runtime::FakeNodeRuntime;
-        use settings::SettingsStore;
-        use ui::Context as _;
-
-        if !cx.has_global::<SettingsStore>() {
-            let settings_store = SettingsStore::test(cx);
-            cx.set_global(settings_store);
-        }
-
-        let fs = fs::FakeFs::new(cx.background_executor().clone());
-        let languages = Arc::new(LanguageRegistry::test(cx.background_executor().clone()));
-        let clock = Arc::new(clock::FakeSystemClock::default());
-        let http_client = util::http::FakeHttpClient::with_404_response();
-        let client = Client::new(clock, http_client.clone(), cx);
-        let user_store = cx.new_model(|cx| UserStore::new(client.clone(), cx));
-        let workspace_store = cx.new_model(|cx| WorkspaceStore::new(client.clone(), cx));
-
-        theme::init(theme::LoadThemes::JustBase, cx);
-        client::init(&client, cx);
-        crate::init_settings(cx);
-
-        Arc::new(Self {
-            client,
-            fs,
-            languages,
-            user_store,
-            workspace_store,
-            node_runtime: FakeNodeRuntime::new(),
-            build_window_options: |_, _| Default::default(),
-        })
     }
 }
 
@@ -853,7 +817,6 @@ impl Workspace {
     > {
         let project_handle = Project::local(
             app_state.client.clone(),
-            app_state.node_runtime.clone(),
             app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -3670,29 +3633,6 @@ impl Workspace {
                     workspace.reopen_closed_item(cx).detach();
                 }),
             )
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn test_new(project: Model<Project>, cx: &mut ViewContext<Self>) -> Self {
-        use node_runtime::FakeNodeRuntime;
-
-        let client = project.read(cx).client();
-        let user_store = project.read(cx).user_store();
-
-        let workspace_store = cx.new_model(|cx| WorkspaceStore::new(client.clone(), cx));
-        cx.activate_window();
-        let app_state = Arc::new(AppState {
-            languages: project.read(cx).languages().clone(),
-            workspace_store,
-            client,
-            user_store,
-            fs: project.read(cx).fs().clone(),
-            build_window_options: |_, _| Default::default(),
-            node_runtime: FakeNodeRuntime::new(),
-        });
-        let workspace = Self::new(Default::default(), project, app_state, cx);
-        workspace.active_pane.update(cx, |pane, cx| pane.focus(cx));
-        workspace
     }
 
     pub fn register_action<A: Action>(

@@ -317,7 +317,7 @@ pub enum Formatter {
     /// Format code using the current language server.
     LanguageServer,
     /// Format code using Zed's Prettier integration.
-    Prettier,
+    //Prettier,
     /// Format code using an external command.
     External {
         /// The external program to run.
