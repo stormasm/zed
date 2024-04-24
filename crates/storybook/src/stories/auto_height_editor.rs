@@ -15,6 +15,16 @@ impl AutoHeightEditorStory {
             editor::actions::Newline,
             Some("Editor"),
         )]);
+        cx.bind_keys([KeyBinding::new(
+            "backspace",
+            editor::actions::Backspace,
+            Some("Editor"),
+        )]);
+        cx.bind_keys([KeyBinding::new(
+            "delete",
+            editor::actions::Delete,
+            Some("Editor"),
+        )]);
         cx.new_view(|cx| Self {
             editor: cx.new_view(|cx| {
                 let mut editor = Editor::auto_height(3, cx);
