@@ -3421,6 +3421,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        log::info!("workspace.rs: resize_pane amount in Pixels = {:?}", amount);
         let docks = self.all_docks();
         let active_dock = docks
             .into_iter()
