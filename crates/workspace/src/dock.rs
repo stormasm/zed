@@ -678,6 +678,7 @@ impl Dock {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        log::info!("dock.rs: resize_active_panel size in Pixels = {:?}", size);
         if let Some(entry) = self.active_panel_entry() {
             let size = size.map(|size| size.max(RESIZE_HANDLE_SIZE).round());
 
