@@ -150,6 +150,9 @@ impl TaffyLayoutEngine {
         window: &mut Window,
         cx: &mut App,
     ) {
+        let my_edges = self.get_edges(id);
+        println!("Edges: {:?}", my_edges);
+
         // Leaving this here until we have a better instrumentation approach.
         // println!("Laying out {} children", self.count_all_children(id)?);
         // println!("Max layout depth: {}", self.max_depth(0, id)?);
@@ -177,7 +180,7 @@ impl TaffyLayoutEngine {
             }
         }
 
-        // let started_at = std::time::Instant::now();
+        let started_at = std::time::Instant::now();
         self.taffy
             .compute_layout_with_measure(
                 id.into(),
@@ -198,7 +201,7 @@ impl TaffyLayoutEngine {
             )
             .expect(EXPECT_MESSAGE);
 
-        // println!("compute_layout took {:?}", started_at.elapsed());
+        println!("compute_layout took {:?}", started_at.elapsed());
     }
 
     pub fn layout_bounds(&mut self, id: LayoutId) -> Bounds<Pixels> {
