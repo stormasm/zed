@@ -3,9 +3,7 @@ use gpui::{
     div, prelude::*, px, rgb, size,
 };
 
-struct HelloWorld {
-    //text: SharedString,
-}
+struct HelloWorld {}
 
 impl Render for HelloWorld {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
@@ -35,11 +33,7 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            |_, cx| {
-                cx.new(|_| HelloWorld {
-                    //text: "World".into(),
-                })
-            },
+            |_, cx| cx.new(|_| HelloWorld {}),
         )
         .unwrap();
         cx.activate(true);
